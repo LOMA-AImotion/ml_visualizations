@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Binomialverteilung</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.1/plotly.min.js"></script>
+    <style>
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            font-family: system-ui, sans-serif;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .slider { width: 80%; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="text-align: center;">
+            <h2>Binomialverteilung B(n,π)</h2>
+            <p>n = 10 Versuche</p>
+        </div>
+        
+        <div id="plot"></div>
+        
+        <div class="controls">
+            <label for="p">Erfolgswahrscheinlichkeit π: <span id="pValue">0.5</span></label><br>
+            <input type="range" id="p" class="slider" min="0" max="1" step="0.01" value="0.5">
+        </div>
+    </div>
+
+    <script>
+        function factorial(n) {
+            if (n === 0 || n === 1) return 1;
+            return n * factorial(n - 1);
+        }
+
+        function binomialProbability(n, k, p) {
+            return (factorial(n) / (factorial(k) * factorial(n - k))) * 
+                   Math.pow(p, k) * Math.pow(1 - p, n - k);
+        }
+
+        function updatePlot() {
+            const p = parseFloat(document.getElementById('p').value);
+            document.getElementById('pValue').textContent = p.toFixed(2);
+            
+            const n = 10;
+            const x = Array.from({length: n + 1}, (_, i) => i);
+            const probs = x.map(k => binomialProbability(n, k, p));
+            
+            const trace = {
+                x: x,
+                y: probs,
+                type: 'bar',
+                marker: {color: '#1f77b4'},
+                width: 0.8
+            };
+            
+            const layout = {
+                height: 400,
+                xaxis: {
+                    title: 'k (Anzahl Erfolge)',
+                    dtick: 1,
+                    range: [-0.5, 10.5]
+                },
+                yaxis: {
+                    title: 'P(X = k)',
+                    range: [0, 0.4],
+                    dtick: 0.05
+                },
+                margin: {t: 20},
+                annotations: [{
+                    x: 5,
+                    y: Math.max(...probs),
+                    text: `E(X) = ${(n*p).toFixed(1)}`,
+                    showarrow: false,
+                    yshift: 20
+                }]
+            };
+            
+            Plotly.newPlot('plot', [trace], layout);
+        }
+
+        updatePlot();
+        document.getElementById('p').addEventListener('input', updatePlot);
+    </script>
+</body>
+</html>

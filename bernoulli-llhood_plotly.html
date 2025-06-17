@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bernoulli-Likelihood-Visualisierung</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.24.1/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .samples {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        .sample-point {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        .slider-container {
+            margin: 20px 0;
+        }
+        #parameterSlider {
+            width: 100%;
+        }
+        .formula {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+            font-family: "Times New Roman", Times, serif;
+        }
+        .refresh-button {
+            background-color: #3b82f6;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .refresh-button:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Bernoulli-Likelihood-Visualisierung</h2>
+        
+        <div class="formula">
+            <strong>Likelihood-Formel:</strong><br>
+            L(π | x₁, ..., x₁₀) = π^(Anzahl der Einsen) × (1-π)^(Anzahl der Nullen)<br>
+            <strong>Log-Likelihood-Formel:</strong><br>
+            ℓ(π | x₁, ..., x₁₀) = (Anzahl der Einsen) × log(π) + (Anzahl der Nullen) × log(1-π)
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 20px;">
+            <div id="samples" class="samples"></div>
+            <button id="refreshButton" class="refresh-button">Neue Stichprobe</button>
+        </div>
+        
+        <div class="slider-container">
+            <label for="parameterSlider">Geschätztes π: <span id="parameterValue">0.50</span></label><br>
+            <input type="range" id="parameterSlider" min="0" max="100" value="50">
+            <p>
+                Likelihood: <span id="likelihood">0</span><br>
+                Log-Likelihood: <span id="logLikelihood">0</span>
+            </p>
+        </div>
+        
+        <div id="likelihoodPlot"></div>
+    </div>
+
+    <script>
+        // Generate sample data (p = 0.3)
+        const generateSample = () => {
+            const p = 0.3;
+            return Array.from({ length: 10 }, () => Math.random() < p ? 1 : 0);
+        };
+
+        const data = generateSample();
+
+        // Display samples as colored circles
+        const samplesDiv = document.getElementById('samples');
+        data.forEach(value => {
+            const circle = document.createElement('div');
+            circle.className = 'sample-point';
+            circle.style.backgroundColor = value === 1 ? '#ef4444' : '#3b82f6';
+            circle.textContent = value;
+            samplesDiv.appendChild(circle);
+        });
+
+        // Calculate likelihood for given parameter
+        const calculateLikelihood = (p) => {
+            const successes = data.filter(x => x === 1).length;
+            const failures = data.length - successes;
+            return Math.pow(p, successes) * Math.pow(1 - p, failures);
+        };
+
+        // Calculate log-likelihood for given parameter
+        const calculateLogLikelihood = (p) => {
+            const successes = data.filter(x => x === 1).length;
+            const failures = data.length - successes;
+            return successes * Math.log(p) + failures * Math.log(1 - p);
+        };
+
+        // Generate likelihood curve data
+        const generateCurves = () => {
+            const x = Array.from({ length: 101 }, (_, i) => i / 100);
+            const y1 = x.map(p => calculateLikelihood(p));
+            const y2 = x.map(p => calculateLogLikelihood(p));
+            return { x, y1, y2 };
+        };
+
+        // Initial plot
+        const curveData = generateCurves();
+        const trace1 = {
+            x: curveData.x,
+            y: curveData.y1,
+            mode: 'lines',
+            name: 'Likelihood',
+            line: {
+                color: '#3b82f6'
+            }
+        };
+
+        const trace2 = {
+            x: curveData.x,
+            y: curveData.y2,
+            mode: 'lines',
+            name: 'Log-Likelihood',
+            line: {
+                color: '#22c55e'
+            },
+            yaxis: 'y2'
+        };
+
+        const layout = {
+            title: 'Likelihood- und Log-Likelihood-Funktion',
+            xaxis: {
+                title: 'π',
+                range: [0, 1]
+            },
+            yaxis: {
+                title: 'Likelihood',
+                titlefont: {color: '#3b82f6'},
+                tickfont: {color: '#3b82f6'}
+            },
+            yaxis2: {
+                title: 'Log-Likelihood',
+                titlefont: {color: '#22c55e'},
+                tickfont: {color: '#22c55e'},
+                overlaying: 'y',
+                side: 'right',
+                range: [-25, 0]  // Adjusted range for better visualization
+            },
+            showlegend: true,
+            legend: {
+                x: 0.7,
+                y: 1
+            }
+        };
+
+        Plotly.newPlot('likelihoodPlot', [trace1, trace2], layout);
+
+        // Update displays when slider changes
+        const slider = document.getElementById('parameterSlider');
+        const parameterValue = document.getElementById('parameterValue');
+        const likelihoodValue = document.getElementById('likelihood');
+        const logLikelihoodValue = document.getElementById('logLikelihood');
+
+        slider.addEventListener('input', (e) => {
+            const p = e.target.value / 100;
+            parameterValue.textContent = p.toFixed(2);
+            
+            const likelihood = calculateLikelihood(p);
+            const logLikelihood = calculateLogLikelihood(p);
+            likelihoodValue.textContent = likelihood.toFixed(4);
+            logLikelihoodValue.textContent = logLikelihood.toFixed(4);
+
+            // Add vertical lines at current parameter value
+            const updatedData = [
+                trace1,
+                trace2,
+                {
+                    x: [p, p],
+                    y: [0, calculateLikelihood(p)],
+                    mode: 'lines',
+                    name: 'Aktuelles π',
+                    line: {
+                        color: '#ef4444',
+                        dash: 'dash'
+                    }
+                },
+                {
+                    x: [p, p],
+                    y: [calculateLogLikelihood(0), calculateLogLikelihood(p)],
+                    mode: 'lines',
+                    name: 'Aktuelles π (Log)',
+                    line: {
+                        color: '#ef4444',
+                        dash: 'dash'
+                    },
+                    yaxis: 'y2'
+                }
+            ];
+            
+            Plotly.react('likelihoodPlot', updatedData, layout);
+        });
+
+        // Refresh sample and update everything
+        const refreshSample = () => {
+            // Generate new data
+            data.length = 0;
+            const newData = generateSample();
+            newData.forEach(x => data.push(x));
+            
+            // Update sample visualization
+            samplesDiv.innerHTML = '';
+            data.forEach(value => {
+                const circle = document.createElement('div');
+                circle.className = 'sample-point';
+                circle.style.backgroundColor = value === 1 ? '#ef4444' : '#3b82f6';
+                circle.textContent = value;
+                samplesDiv.appendChild(circle);
+            });
+            
+            // Update curves
+            const newCurveData = generateCurves();
+            trace1.y = newCurveData.y1;
+            trace2.y = newCurveData.y2;
+            
+            // Update current values
+            const p = slider.value / 100;
+            likelihoodValue.textContent = calculateLikelihood(p).toFixed(4);
+            logLikelihoodValue.textContent = calculateLogLikelihood(p).toFixed(4);
+            
+            // Trigger plot update
+            slider.dispatchEvent(new Event('input'));
+        };
+
+        // Add refresh button handler
+        document.getElementById('refreshButton').addEventListener('click', refreshSample);
+
+        // Initial calculations
+        likelihoodValue.textContent = calculateLikelihood(0.5).toFixed(4);
+        logLikelihoodValue.textContent = calculateLogLikelihood(0.5).toFixed(4);
+    </script>
+</body>
+</html>

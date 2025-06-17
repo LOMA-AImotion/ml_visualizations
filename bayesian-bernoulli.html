@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bayessche Inferenz für Bernoulli-Parameter</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.24.1/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .control-group {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+        .data-display {
+            margin: 10px 0;
+        }
+        .samples {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .sample-point {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        .refresh-button {
+            background-color: #3b82f6;
+            color: white;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+        .refresh-button:hover {
+            background-color: #2563eb;
+        }
+        .data-header {
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Bayessche Inferenz für Bernoulli-Parameter</h2>
+        
+        <div class="data-display">
+            <div class="data-header">
+                <h3 id="dataDescription">Daten: 2 Erfolge, 8 Misserfolge</h3>
+                <button id="refreshButton" class="refresh-button">Neue Stichprobe</button>
+            </div>
+            <div class="samples">
+                <div class="sample-point" style="background-color: #ef4444">1</div>
+                <div class="sample-point" style="background-color: #ef4444">1</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+                <div class="sample-point" style="background-color: #3b82f6">0</div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <div class="control-group">
+                <h3>Beta-Prior Parameter</h3>
+                <div>
+                    <label for="alphaSlider">α: <span id="alphaValue">1.00</span></label><br>
+                    <input type="range" id="alphaSlider" min="1" max="100" value="10" step="1">
+                </div>
+                <div>
+                    <label for="betaSlider">β: <span id="betaValue">1.00</span></label><br>
+                    <input type="range" id="betaSlider" min="1" max="100" value="10" step="1">
+                </div>
+            </div>
+        </div>
+        
+        <div id="plotDiv"></div>
+    </div>
+
+    <script>
+        // Beta function implementation
+        function lnGamma(z) {
+            const c = [76.18009172947146, -86.50532032941677, 24.01409824083091,
+                      -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+            let sum = 1.000000000190015;
+            for (let i = 0; i < 6; i++) {
+                sum += c[i] / (z + i + 1);
+            }
+            return (Math.log(2.5066282746310005 * sum) - Math.log(z + 5.5) * (z + 0.5) + Math.log(z + 5.5) * z);
+        }
+
+        function beta(x, a, b) {
+            if (x <= 0 || x >= 1) return 0;
+            // Compute on log scale for numerical stability
+            const logBeta = lnGamma(a) + lnGamma(b) - lnGamma(a + b);
+            return Math.exp(Math.log(x) * (a - 1) + Math.log(1 - x) * (b - 1) - logBeta);
+        }
+
+        // Global data array
+        let currentData = Array(10).fill(0);
+        currentData[0] = currentData[1] = 1; // Initial state: 2 successes, 8 failures
+
+        // Likelihood function based on current data
+        function likelihood(p) {
+            const successes = currentData.reduce((a, b) => a + b, 0);
+            const failures = currentData.length - successes;
+            return Math.pow(p, successes) * Math.pow(1 - p, failures);
+        }
+
+        // Generate new sample data
+        function generateNewSample() {
+            const p = 0.3; // True parameter
+            currentData = Array.from({ length: 10 }, () => Math.random() < p ? 1 : 0);
+            
+            // Update visual representation
+            const samplesDiv = document.querySelector('.samples');
+            samplesDiv.innerHTML = '';
+            currentData.forEach(value => {
+                const circle = document.createElement('div');
+                circle.className = 'sample-point';
+                circle.style.backgroundColor = value === 1 ? '#ef4444' : '#3b82f6';
+                circle.textContent = value;
+                samplesDiv.appendChild(circle);
+            });
+
+            // Update data description
+            const successes = currentData.reduce((a, b) => a + b, 0);
+            const failures = currentData.length - successes;
+            document.getElementById('dataDescription').textContent = 
+                `Daten: ${successes} Erfolge, ${failures} Misserfolge`;
+
+            // Update plot
+            updatePlot();
+        }
+
+        // Update plot based on current parameters
+        function updatePlot() {
+            const alpha = parseFloat(document.getElementById('alphaSlider').value);
+            const betaValue = parseFloat(document.getElementById('betaSlider').value);
+            
+            document.getElementById('alphaValue').textContent = alpha.toFixed(2);
+            document.getElementById('betaValue').textContent = betaValue.toFixed(2);
+
+            // Generate x values
+            const x = Array.from({length: 201}, (_, i) => i / 200);
+            
+            // Calculate distributions
+            const prior = x.map(p => beta(p, alpha, betaValue));
+            const likelihoodVals = x.map(likelihood);
+            
+            // Calculate posterior (proportional to prior * likelihood)
+            const posterior = x.map((p, i) => prior[i] * likelihoodVals[i]);
+            
+            // Normalize distributions
+            const normalize = arr => {
+                const sum = arr.reduce((a, b) => a + b) * (1/200);
+                return arr.map(v => v / sum);
+            };
+            
+            const priorNorm = normalize(prior);
+            const likelihoodNorm = normalize(likelihoodVals);
+            const posteriorNorm = normalize(posterior);
+
+            // Create plot
+            const traces = [
+                {
+                    x: x,
+                    y: priorNorm,
+                    name: 'Prior',
+                    line: {color: '#3b82f6'}
+                },
+                {
+                    x: x,
+                    y: likelihoodNorm,
+                    name: 'Likelihood',
+                    line: {color: '#22c55e'}
+                },
+                {
+                    x: x,
+                    y: posteriorNorm,
+                    name: 'Posterior',
+                    line: {color: '#ef4444'}
+                }
+            ];
+
+            const layout = {
+                title: 'Prior-, Likelihood- und Posterior-Verteilungen',
+                xaxis: {
+                    title: 'π',
+                    range: [0, 1]
+                },
+                yaxis: {
+                    title: 'Dichte'
+                },
+                showlegend: true,
+                legend: {
+                    x: 0.7,
+                    y: 1,
+                    traceorder: 'normal',
+                    font: {size: 12},
+                    items: [
+                        {name: 'Prior', color: '#3b82f6'},
+                        {name: 'Likelihood', color: '#22c55e'},
+                        {name: 'Posterior', color: '#ef4444'}
+                    ]
+                }
+            };
+
+            Plotly.newPlot('plotDiv', traces, layout);
+        }
+
+        // Add event listeners
+        document.getElementById('alphaSlider').addEventListener('input', updatePlot);
+        document.getElementById('betaSlider').addEventListener('input', updatePlot);
+
+        // Add refresh button handler
+        document.getElementById('refreshButton').addEventListener('click', generateNewSample);
+
+        // Initial plot
+        updatePlot();
+    </script>
+</body>
+</html>

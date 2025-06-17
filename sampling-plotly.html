@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.1/plotly.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        #parentDist {
+            grid-column: 1 / -1;
+        }
+        .button-container {
+            grid-column: 1 / -1;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="button-container">
+            <button onclick="generateNewSamples()">Generate New Samples</button>
+        </div>
+        <div id="parentDist"></div>
+        <div id="samples"></div>
+        <div id="samplingDist"></div>
+    </div>
+
+    <script>
+        // Parameters
+        const mu = 180;
+        const sigma = 20;
+        const sampleSize = 15;  // Changed from 20 to 15
+        const criticalValue = 1.96;  // For 95% confidence
+
+        // Generate parent distribution data
+        const x = Array.from({length: 100}, (_, i) => mu - 4*sigma + (8*sigma * i/100));
+        const y = x.map(val => 
+            (1/(sigma * Math.sqrt(2 * Math.PI))) * 
+            Math.exp(-0.5 * Math.pow((val - mu)/sigma, 2))
+        );
+
+        // Generate samples using Box-Muller transform
+        function generateSample() {
+            return Array.from({length: sampleSize}, () => {
+                let u = 0, v = 0;
+                while (u === 0) u = Math.random();
+                while (v === 0) v = Math.random();
+                return mu + sigma * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+            });
+        }
+
+        // Plot parent distribution
+        function plotParentDistribution() {
+            const trace = {
+                x: x,
+                y: y,
+                type: 'scatter',
+                mode: 'lines',
+                name: 'Parent Distribution',
+                line: { color: 'rgb(31, 119, 180)' }
+            };
+
+            const layout = {
+                title: 'Parent Normal Distribution (μ=180, σ=20)',
+                xaxis: { range: [mu - 3*sigma, mu + 3*sigma] },
+                height: 300,
+                margin: { t: 40, r: 40, l: 40, b: 40 },
+                showlegend: false
+            };
+
+            Plotly.newPlot('parentDist', [trace], layout);
+        }
+
+        // Plot samples
+        function plotSamples(samples, sampleMeans) {
+            const data = [];
+            
+            samples.forEach((sample, i) => {
+                data.push({
+                    x: sample,
+                    type: 'histogram',
+                    name: `Sample ${i+1}`,
+                    nbinsx: 10,
+                    marker: { color: 'rgb(158, 202, 225)' },
+                    xaxis: `x${i+1}`,
+                    yaxis: `y${i+1}`
+                });
+
+                data.push({
+                    x: [sampleMeans[i], sampleMeans[i]],
+                    y: [0, 5],
+                    type: 'scatter',
+                    mode: 'lines',
+                    line: { color: 'red', width: 2 },
+                    name: 'Sample Mean',
+                    xaxis: `x${i+1}`,
+                    yaxis: `y${i+1}`,
+                    showlegend: false
+                });
+            });
+
+            const layout = {
+                grid: {rows: 3, columns: 1, pattern: 'independent'},
+                height: 600,
+                width: 600,
+                showlegend: false,
+                annotations: sampleMeans.map((mean, i) => ({
+                    x: mean,
+                    y: 4.5,
+                    xref: `x${i+1}`,
+                    yref: `y${i+1}`,
+                    text: `x̄=${mean.toFixed(1)}`,
+                    showarrow: false
+                }))
+            };
+
+            samples.forEach((_, i) => {
+                layout[`xaxis${i+1}`] = { 
+                    range: [mu - 3*sigma, mu + 3*sigma],
+                    title: i === 2 ? 'Value' : ''
+                };
+                layout[`yaxis${i+1}`] = { 
+                    range: [0, 5],
+                    title: `Sample ${i+1} Frequency`
+                };
+            });
+
+            Plotly.newPlot('samples', data, layout);
+        }
+
+        // Plot sampling distribution
+        function plotSamplingDistribution(sampleMeans) {
+            const standardError = sigma/Math.sqrt(sampleSize);
+            const samplingX = Array.from({length: 200}, (_, i) => 
+                mu - 4*standardError + (8*standardError * i/200)
+            );
+            
+            // Function to calculate normal density
+            const normalDensity = (x, mean, sd) => 
+                (1/(sd * Math.sqrt(2 * Math.PI))) * 
+                Math.exp(-0.5 * Math.pow((x - mean)/sd, 2));
+
+            const samplingY = samplingX.map(x => normalDensity(x, mu, standardError));
+            
+            // Create confidence interval bounds
+            const ciLower = mu - criticalValue * standardError;
+            const ciUpper = mu + criticalValue * standardError;
+            
+            // Filter x and y values for the confidence region
+            const xInCI = samplingX.filter(x => x >= ciLower && x <= ciUpper);
+            const yInCI = xInCI.map(x => normalDensity(x, mu, standardError));
+
+            const traces = [
+                // 95% confidence region
+                {
+                    x: [...xInCI, ...xInCI.reverse()],
+                    y: [...yInCI, ...Array(xInCI.length).fill(0)],
+                    fill: 'toself',
+                    fillcolor: 'rgba(231, 234, 241, 0.9)',
+                    line: { width: 0 },
+                    name: '95% Confidence Region',
+                    showlegend: true
+                },
+                // Sampling distribution curve
+                {
+                    x: samplingX,
+                    y: samplingY,
+                    type: 'scatter',
+                    mode: 'lines',
+                    name: 'Sampling Distribution',
+                    line: { color: 'rgb(31, 119, 180)' }
+                },
+                // Sample means
+                {
+                    x: sampleMeans,
+                    y: Array(3).fill(Math.max(...samplingY) / 2),
+                    type: 'scatter',
+                    mode: 'markers',
+                    marker: { color: 'red', size: 10 },
+                    name: 'Sample Means'
+                }
+            ];
+
+            const layout = {
+                title: 'Sampling Distribution of Means (n=15)',
+                xaxis: { 
+                    range: [mu - 3*standardError, mu + 3*standardError],
+                    title: 'Sample Mean'
+                },
+                yaxis: {
+                    title: 'Density'
+                },
+                height: 600,
+                width: 600,
+                showlegend: true,
+                annotations: [{
+                    x: mu,
+                    y: Math.max(...samplingY) * 1.1,
+                    text: `95% CI: [${ciLower.toFixed(1)}, ${ciUpper.toFixed(1)}]`,
+                    showarrow: false
+                }]
+            };
+
+            Plotly.newPlot('samplingDist', traces, layout);
+        }
+
+        // Function to generate and plot new samples
+        function generateNewSamples() {
+            const samples = [
+                generateSample(),
+                generateSample(),
+                generateSample()
+            ];
+            const sampleMeans = samples.map(sample => 
+                sample.reduce((a, b) => a + b, 0) / sample.length
+            );
+            
+            plotSamples(samples, sampleMeans);
+            plotSamplingDistribution(sampleMeans);
+        }
+
+        // Initial plots
+        plotParentDistribution();
+        generateNewSamples();
+    </script>
+</body>
+</html>

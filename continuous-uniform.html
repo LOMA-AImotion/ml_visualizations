@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <title>Stetige Gleichverteilung</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.1/plotly.min.js"></script>
+    <style>
+        body {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            font-family: system-ui, sans-serif;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            text-align: center;
+            display: flex;
+            justify-content: space-around;
+        }
+        .slider-container { width: 45%; }
+        .slider { width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div style="text-align: center;">
+            <h2>Stetige Gleichverteilung U(α,β)</h2>
+        </div>
+        
+        <div id="plot"></div>
+        
+        <div class="controls">
+            <div class="slider-container">
+                <label for="alpha">α: <span id="alphaValue">-2.0</span></label><br>
+                <input type="range" id="alpha" class="slider" min="-5" max="5" step="0.1" value="-2.0">
+            </div>
+            <div class="slider-container">
+                <label for="beta">β: <span id="betaValue">2.0</span></label><br>
+                <input type="range" id="beta" class="slider" min="-5" max="5" step="0.1" value="2.0">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function updatePlot() {
+            let alpha = parseFloat(document.getElementById('alpha').value);
+            let beta = parseFloat(document.getElementById('beta').value);
+            
+            if (beta <= alpha) {
+                beta = alpha + 0.1;
+                document.getElementById('beta').value = beta;
+            }
+            
+            document.getElementById('alphaValue').textContent = alpha.toFixed(1);
+            document.getElementById('betaValue').textContent = beta.toFixed(1);
+            
+            const x = [];
+            const y_density = [];
+            
+            for (let xi = -6; xi <= 6; xi += 0.01) {
+                x.push(xi);
+                if (xi >= alpha && xi <= beta) {
+                    y_density.push(1 / (beta - alpha));
+                } else {
+                    y_density.push(0);
+                }
+            }
+            
+            const density = {
+                x: x,
+                y: y_density,
+                type: 'scatter',
+                name: 'Dichte f(x)',
+                line: {color: '#1f77b4', width: 2}
+            };
+            
+            const layout = {
+                height: 400,
+                showlegend: true,
+                legend: {
+                    x: 0.85,
+                    y: 1.1
+                },
+                xaxis: {
+                    title: 'x',
+                    range: [-6, 6],
+                    dtick: 1
+                },
+                yaxis: {
+                    title: 'f(x)',
+                    range: [0, 1.1],
+                    dtick: 0.2
+                },
+                annotations: [{
+                    x: (alpha + beta) / 2,
+                    y: 1 / (beta - alpha),
+                    text: `f(x) = 1/(β-α) = ${(1/(beta-alpha)).toFixed(2)}`,
+                    showarrow: false,
+                    yshift: 10
+                }]
+            };
+            
+            Plotly.newPlot('plot', [density], layout);
+        }
+
+        updatePlot();
+        document.getElementById('alpha').addEventListener('input', updatePlot);
+        document.getElementById('beta').addEventListener('input', updatePlot);
+    </script>
+</body>
+</html>
