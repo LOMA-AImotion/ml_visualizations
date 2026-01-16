@@ -14,7 +14,6 @@ Interactive demonstrations of fundamental probability distributions and concepts
 - [Discrete Uniform Distribution](https://loma-aimotion.github.io/ml_visualizations/discrete-uniform.html) - Discrete uniform distribution visualization
 - [Continuous Uniform Distribution](https://loma-aimotion.github.io/ml_visualizations/continuous-uniform.html) - Continuous uniform distribution
 - [Parametric Distributions](https://loma-aimotion.github.io/ml_visualizations/parametric-dist-plotly.html) - Exploration of parametric distribution families
-- [Central Limit Theorem](https://loma-aimotion.github.io/ml_visualizations/central_limit_theorem.html) - Interactive demonstration of the CLT
 
 ## 📈 Statistics
 
@@ -23,6 +22,8 @@ Visualizations for statistical inference and sampling concepts:
 - [Sampling Distribution](https://loma-aimotion.github.io/ml_visualizations/sampling-plotly.html) - Interactive sampling demonstration
 - [Sampling with Confidence Intervals](https://loma-aimotion.github.io/ml_visualizations/sampling-plotly_CI.html) - Confidence interval construction
 - [Sampling (Unknown Variance)](https://loma-aimotion.github.io/ml_visualizations/sampling-plotly_unknown_variance.html) - Sampling when population variance is unknown
+- [Central Limit Theorem](https://loma-aimotion.github.io/ml_visualizations/central_limit_theorem.html) - Interactive demonstration of the CLT
+
 
 ## 🧠 Neural Networks
 
