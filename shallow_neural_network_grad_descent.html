@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Shallow Neural Network with Gradient Descent</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .plots-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .unit-column {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .unit-column h3 {
+            margin: 0 0 10px 0;
+            text-align: center;
+            color: #555;
+        }
+        canvas {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .slider-row {
+            display: flex;
+            align-items: center;
+            margin: 8px 0;
+            gap: 8px;
+        }
+        .slider-row label {
+            width: 70px;
+            font-weight: 500;
+            color: #333;
+        }
+        .slider-row input[type="range"] {
+            flex: 1;
+            min-width: 100px;
+        }
+        .slider-row .value {
+            width: 50px;
+            text-align: right;
+            font-family: monospace;
+        }
+        .slider-row .gradient {
+            width: 80px;
+            text-align: right;
+            font-family: monospace;
+            font-size: 0.85em;
+            color: #666;
+        }
+        .gradient.positive { color: #c44; }
+        .gradient.negative { color: #4a4; }
+        .output-section {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 10px;
+        }
+        .output-section h3 {
+            margin: 0 0 10px 0;
+            text-align: center;
+            color: #555;
+        }
+        .controls-row {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .output-sliders {
+            flex: 1;
+            min-width: 300px;
+        }
+        .gradient-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        .gradient-controls button {
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background: #476779;
+            color: white;
+            transition: background 0.2s;
+        }
+        .gradient-controls button:hover {
+            background: #365566;
+        }
+        .lr-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .lr-control label {
+            font-weight: 500;
+        }
+        .lr-control input {
+            width: 80px;
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .stats {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
+            font-size: 16px;
+        }
+        .stats span {
+            font-weight: 500;
+        }
+        .stats .rmse { color: #c44; }
+        .stats .step { color: #476779; }
+        .loss-section {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        .loss-section h3 {
+            margin: 0 0 10px 0;
+            text-align: center;
+            color: #555;
+        }
+        #animateBtn {
+            background: #2a9d8f;
+        }
+        #animateBtn:hover {
+            background: #238b7e;
+        }
+        #animateBtn.running {
+            background: #e76f51;
+        }
+        #animateBtn.running:hover {
+            background: #d45d41;
+        }
+        .legend {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .legend-color {
+            width: 20px;
+            height: 3px;
+        }
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Shallow Neural Network with Gradient Descent</h1>
+        
+        <div class="plots-row">
+            <!-- Hidden Unit 1 -->
+            <div class="unit-column">
+                <h3>Hidden Unit 1</h3>
+                <canvas id="canvas1" width="280" height="250"></canvas>
+                <div class="slider-row">
+                    <label>b₁</label>
+                    <input type="range" id="b1" min="-5" max="5" step="0.1" value="0">
+                    <span class="value" id="b1_val">0.0</span>
+                    <span class="gradient" id="b1_grad">∂L/∂b₁: 0.00</span>
+                </div>
+                <div class="slider-row">
+                    <label>w₁</label>
+                    <input type="range" id="w1" min="-5" max="5" step="0.1" value="1">
+                    <span class="value" id="w1_val">1.0</span>
+                    <span class="gradient" id="w1_grad">∂L/∂w₁: 0.00</span>
+                </div>
+            </div>
+            
+            <!-- Hidden Unit 2 -->
+            <div class="unit-column">
+                <h3>Hidden Unit 2</h3>
+                <canvas id="canvas2" width="280" height="250"></canvas>
+                <div class="slider-row">
+                    <label>b₂</label>
+                    <input type="range" id="b2" min="-5" max="5" step="0.1" value="0">
+                    <span class="value" id="b2_val">0.0</span>
+                    <span class="gradient" id="b2_grad">∂L/∂b₂: 0.00</span>
+                </div>
+                <div class="slider-row">
+                    <label>w₂</label>
+                    <input type="range" id="w2" min="-5" max="5" step="0.1" value="1">
+                    <span class="value" id="w2_val">1.0</span>
+                    <span class="gradient" id="w2_grad">∂L/∂w₂: 0.00</span>
+                </div>
+            </div>
+            
+            <!-- Hidden Unit 3 -->
+            <div class="unit-column">
+                <h3>Hidden Unit 3</h3>
+                <canvas id="canvas3" width="280" height="250"></canvas>
+                <div class="slider-row">
+                    <label>b₃</label>
+                    <input type="range" id="b3" min="-5" max="5" step="0.1" value="0">
+                    <span class="value" id="b3_val">0.0</span>
+                    <span class="gradient" id="b3_grad">∂L/∂b₃: 0.00</span>
+                </div>
+                <div class="slider-row">
+                    <label>w₃</label>
+                    <input type="range" id="w3" min="-5" max="5" step="0.1" value="1">
+                    <span class="value" id="w3_val">1.0</span>
+                    <span class="gradient" id="w3_grad">∂L/∂w₃: 0.00</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Output Section -->
+        <div class="output-section">
+            <h3>Output</h3>
+            <canvas id="canvasOutput" width="900" height="280"></canvas>
+            
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #476779;"></div>
+                    <span>Prediction</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: #c44;"></div>
+                    <span>Target Data</span>
+                </div>
+            </div>
+            
+            <div class="controls-row">
+                <div class="output-sliders">
+                    <div class="slider-row">
+                        <label>w₀ (bias)</label>
+                        <input type="range" id="w0" min="-7" max="7" step="0.1" value="0">
+                        <span class="value" id="w0_val">0.0</span>
+                        <span class="gradient" id="w0_grad">∂L/∂w₀: 0.00</span>
+                    </div>
+                    <div class="slider-row">
+                        <label>v₁</label>
+                        <input type="range" id="v1" min="-5" max="5" step="0.1" value="1">
+                        <span class="value" id="v1_val">1.0</span>
+                        <span class="gradient" id="v1_grad">∂L/∂v₁: 0.00</span>
+                    </div>
+                    <div class="slider-row">
+                        <label>v₂</label>
+                        <input type="range" id="v2" min="-5" max="5" step="0.1" value="1">
+                        <span class="value" id="v2_val">1.0</span>
+                        <span class="gradient" id="v2_grad">∂L/∂v₂: 0.00</span>
+                    </div>
+                    <div class="slider-row">
+                        <label>v₃</label>
+                        <input type="range" id="v3" min="-5" max="5" step="0.1" value="1">
+                        <span class="value" id="v3_val">1.0</span>
+                        <span class="gradient" id="v3_grad">∂L/∂v₃: 0.00</span>
+                    </div>
+                </div>
+                
+                <div class="gradient-controls">
+                    <div class="lr-control">
+                        <label>Learning Rate:</label>
+                        <input type="number" id="lr" value="0.01" step="0.001" min="0.001" max="1">
+                    </div>
+                    <button onclick="gradientStep(1)">1 Gradient Step</button>
+                    <button onclick="gradientStep(10)">10 Gradient Steps</button>
+                    <button onclick="gradientStep(50)">50 Gradient Steps</button>
+                    <button id="animateBtn" onclick="animatedSteps(100)">▶ Animate 100 Steps</button>
+                    <button onclick="resetParams()">Reset Parameters</button>
+                </div>
+            </div>
+            
+            <div class="stats">
+                <span class="rmse">RMSE: <span id="rmse">0.000</span></span>
+                <span class="step">Step: <span id="stepCount">0</span></span>
+            </div>
+            
+            <!-- Loss Curve -->
+            <div class="loss-section">
+                <h3>Loss Curve (MSE)</h3>
+                <canvas id="canvasLoss" width="900" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Target data (from original file)
+        const targetX = [-4, -3.578947, -3.157895, -2.736842, -2.315789, -1.894737, -1.473684, -1.052632, -0.631579, -0.210526, 0.210526, 0.631579, 1.052632, 1.473684, 1.894737, 2.315789, 2.736842, 3.157895, 3.578947, 4];
+        const targetY = [4.248, 3.129, 2.811, 2.630, 1.227, 0.778, 1.332, 0.659, -0.136, 0.284, -0.220, -0.133, 0.401, -0.418, 0.014, 1.066, 1.367, 2.643, 2.749, 3.288];
+        
+        // X range for plotting
+        const xMin = -5, xMax = 5;
+        const xPlot = [];
+        for (let i = 0; i < 200; i++) {
+            xPlot.push(xMin + (xMax - xMin) * i / 199);
+        }
+        
+        // Parameters
+        let params = {
+            b1: 0, w1: 1,
+            b2: 0, w2: 1,
+            b3: 0, w3: 1,
+            v1: 1, v2: 1, v3: 1,
+            w0: 0
+        };
+        
+        // Gradients
+        let grads = {
+            b1: 0, w1: 0,
+            b2: 0, w2: 0,
+            b3: 0, w3: 0,
+            v1: 0, v2: 0, v3: 0,
+            w0: 0
+        };
+        
+        let stepCount = 0;
+        let lossHistory = [];
+        let animationRunning = false;
+        let animationId = null;
+        
+        // Get canvas contexts
+        const ctx1 = document.getElementById('canvas1').getContext('2d');
+        const ctx2 = document.getElementById('canvas2').getContext('2d');
+        const ctx3 = document.getElementById('canvas3').getContext('2d');
+        const ctxOut = document.getElementById('canvasOutput').getContext('2d');
+        const ctxLoss = document.getElementById('canvasLoss').getContext('2d');
+        
+        // Colors
+        const colors = ['#D18362', '#A0D9D3', '#1f77b4'];
+        
+        // ReLU and its derivative
+        function relu(x) { return Math.max(0, x); }
+        function reluDeriv(x) { return x > 0 ? 1 : 0; }
+        
+        // Forward pass for a single x
+        function forward(x) {
+            const z1 = params.b1 + params.w1 * x;
+            const z2 = params.b2 + params.w2 * x;
+            const z3 = params.b3 + params.w3 * x;
+            
+            const h1 = relu(z1);
+            const h2 = relu(z2);
+            const h3 = relu(z3);
+            
+            const y = params.v1 * h1 + params.v2 * h2 + params.v3 * h3 + params.w0;
+            
+            return { z1, z2, z3, h1, h2, h3, y };
+        }
+        
+        // Compute gradients using MSE loss: L = (1/n) * sum((y - target)^2)
+        // dL/dy = (2/n) * (y - target)
+        function computeGradients() {
+            const n = targetX.length;
+            
+            // Reset gradients
+            for (let key in grads) grads[key] = 0;
+            
+            for (let i = 0; i < n; i++) {
+                const x = targetX[i];
+                const t = targetY[i];
+                const fwd = forward(x);
+                
+                // dL/dy for this sample
+                const dLdy = (2 / n) * (fwd.y - t);
+                
+                // Output layer gradients
+                grads.w0 += dLdy;
+                grads.v1 += dLdy * fwd.h1;
+                grads.v2 += dLdy * fwd.h2;
+                grads.v3 += dLdy * fwd.h3;
+                
+                // Hidden layer gradients (backprop through ReLU)
+                const dh1 = dLdy * params.v1 * reluDeriv(fwd.z1);
+                const dh2 = dLdy * params.v2 * reluDeriv(fwd.z2);
+                const dh3 = dLdy * params.v3 * reluDeriv(fwd.z3);
+                
+                grads.b1 += dh1;
+                grads.w1 += dh1 * x;
+                grads.b2 += dh2;
+                grads.w2 += dh2 * x;
+                grads.b3 += dh3;
+                grads.w3 += dh3 * x;
+            }
+        }
+        
+        // Compute RMSE
+        function computeRMSE() {
+            let mse = 0;
+            for (let i = 0; i < targetX.length; i++) {
+                const pred = forward(targetX[i]).y;
+                mse += Math.pow(pred - targetY[i], 2);
+            }
+            return Math.sqrt(mse / targetX.length);
+        }
+        
+        // Compute MSE (for loss curve)
+        function computeMSE() {
+            let mse = 0;
+            for (let i = 0; i < targetX.length; i++) {
+                const pred = forward(targetX[i]).y;
+                mse += Math.pow(pred - targetY[i], 2);
+            }
+            return mse / targetX.length;
+        }
+        
+        // Gradient descent step
+        function gradientStep(steps) {
+            const lr = parseFloat(document.getElementById('lr').value);
+            
+            for (let s = 0; s < steps; s++) {
+                computeGradients();
+                
+                // Record loss before update
+                lossHistory.push({ step: stepCount, loss: computeMSE() });
+                
+                // Update parameters
+                for (let key in params) {
+                    params[key] -= lr * grads[key];
+                    
+                    // Clamp to slider ranges
+                    if (key === 'w0') {
+                        params[key] = Math.max(-7, Math.min(7, params[key]));
+                    } else {
+                        params[key] = Math.max(-5, Math.min(5, params[key]));
+                    }
+                }
+                
+                stepCount++;
+            }
+            
+            // Update sliders and display
+            updateSlidersFromParams();
+            computeGradients(); // Recompute for display
+            updateDisplay();
+        }
+        
+        // Animated gradient descent
+        function animatedSteps(totalSteps) {
+            const btn = document.getElementById('animateBtn');
+            
+            if (animationRunning) {
+                // Stop animation
+                animationRunning = false;
+                if (animationId) clearTimeout(animationId);
+                btn.textContent = '▶ Animate 100 Steps';
+                btn.classList.remove('running');
+                return;
+            }
+            
+            // Start animation
+            animationRunning = true;
+            btn.textContent = '⏹ Stop';
+            btn.classList.add('running');
+            
+            let stepsRemaining = totalSteps;
+            
+            function doStep() {
+                if (!animationRunning || stepsRemaining <= 0) {
+                    animationRunning = false;
+                    btn.textContent = '▶ Animate 100 Steps';
+                    btn.classList.remove('running');
+                    return;
+                }
+                
+                gradientStep(1);
+                stepsRemaining--;
+                
+                animationId = setTimeout(doStep, 100);
+            }
+            
+            doStep();
+        }
+        
+        // Reset parameters
+        function resetParams() {
+            // Stop any running animation
+            if (animationRunning) {
+                animationRunning = false;
+                if (animationId) clearTimeout(animationId);
+                const btn = document.getElementById('animateBtn');
+                btn.textContent = '▶ Animate 100 Steps';
+                btn.classList.remove('running');
+            }
+            
+            params = { b1: 0, w1: 1, b2: 0, w2: 1, b3: 0, w3: 1, v1: 1, v2: 1, v3: 1, w0: 0 };
+            stepCount = 0;
+            lossHistory = [];
+            updateSlidersFromParams();
+            computeGradients();
+            updateDisplay();
+        }
+        
+        // Update sliders from params
+        function updateSlidersFromParams() {
+            for (let key in params) {
+                document.getElementById(key).value = params[key];
+            }
+        }
+        
+        // Update params from sliders
+        function updateParamsFromSliders() {
+            for (let key in params) {
+                params[key] = parseFloat(document.getElementById(key).value);
+            }
+        }
+        
+        // Draw a plot
+        function drawPlot(ctx, data, color, yMin, yMax, width, height) {
+            const padding = 30;
+            const plotW = width - 2 * padding;
+            const plotH = height - 2 * padding;
+            
+            ctx.clearRect(0, 0, width, height);
+            
+            // Draw grid
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 1;
+            
+            // Vertical grid lines
+            for (let i = 0; i <= 10; i++) {
+                const x = padding + (plotW * i / 10);
+                ctx.beginPath();
+                ctx.moveTo(x, padding);
+                ctx.lineTo(x, height - padding);
+                ctx.stroke();
+            }
+            
+            // Horizontal grid lines
+            for (let i = 0; i <= 10; i++) {
+                const y = padding + (plotH * i / 10);
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+            
+            // Draw axes
+            ctx.strokeStyle = '#999';
+            ctx.lineWidth = 1;
+            
+            // X axis (y=0)
+            const y0 = padding + plotH * (yMax / (yMax - yMin));
+            if (y0 >= padding && y0 <= height - padding) {
+                ctx.beginPath();
+                ctx.moveTo(padding, y0);
+                ctx.lineTo(width - padding, y0);
+                ctx.stroke();
+            }
+            
+            // Y axis (x=0)
+            const x0 = padding + plotW * (-xMin / (xMax - xMin));
+            if (x0 >= padding && x0 <= width - padding) {
+                ctx.beginPath();
+                ctx.moveTo(x0, padding);
+                ctx.lineTo(x0, height - padding);
+                ctx.stroke();
+            }
+            
+            // Draw data
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            
+            for (let i = 0; i < xPlot.length; i++) {
+                const px = padding + plotW * (xPlot[i] - xMin) / (xMax - xMin);
+                const py = padding + plotH * (yMax - data[i]) / (yMax - yMin);
+                
+                if (i === 0) ctx.moveTo(px, py);
+                else ctx.lineTo(px, py);
+            }
+            ctx.stroke();
+            
+            // Axis labels
+            ctx.fillStyle = '#666';
+            ctx.font = '10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(xMin.toString(), padding, height - 10);
+            ctx.fillText(xMax.toString(), width - padding, height - 10);
+            ctx.textAlign = 'right';
+            ctx.fillText(yMax.toFixed(0), padding - 5, padding + 5);
+            ctx.fillText(yMin.toFixed(0), padding - 5, height - padding + 5);
+        }
+        
+        // Draw output plot with target points
+        function drawOutputPlot() {
+            const width = 900, height = 280;
+            const padding = 40;
+            const plotW = width - 2 * padding;
+            const plotH = height - 2 * padding;
+            const yMin = -7, yMax = 7;
+            
+            ctxOut.clearRect(0, 0, width, height);
+            
+            // Draw grid
+            ctxOut.strokeStyle = '#eee';
+            ctxOut.lineWidth = 1;
+            
+            for (let i = 0; i <= 20; i++) {
+                const x = padding + (plotW * i / 20);
+                ctxOut.beginPath();
+                ctxOut.moveTo(x, padding);
+                ctxOut.lineTo(x, height - padding);
+                ctxOut.stroke();
+            }
+            
+            for (let i = 0; i <= 14; i++) {
+                const y = padding + (plotH * i / 14);
+                ctxOut.beginPath();
+                ctxOut.moveTo(padding, y);
+                ctxOut.lineTo(width - padding, y);
+                ctxOut.stroke();
+            }
+            
+            // Draw axes
+            ctxOut.strokeStyle = '#999';
+            ctxOut.lineWidth = 1;
+            
+            const y0 = padding + plotH * (yMax / (yMax - yMin));
+            ctxOut.beginPath();
+            ctxOut.moveTo(padding, y0);
+            ctxOut.lineTo(width - padding, y0);
+            ctxOut.stroke();
+            
+            const x0 = padding + plotW * (-xMin / (xMax - xMin));
+            ctxOut.beginPath();
+            ctxOut.moveTo(x0, padding);
+            ctxOut.lineTo(x0, height - padding);
+            ctxOut.stroke();
+            
+            // Compute output
+            const output = xPlot.map(x => forward(x).y);
+            
+            // Draw prediction line
+            ctxOut.strokeStyle = '#476779';
+            ctxOut.lineWidth = 2;
+            ctxOut.beginPath();
+            
+            for (let i = 0; i < xPlot.length; i++) {
+                const px = padding + plotW * (xPlot[i] - xMin) / (xMax - xMin);
+                const py = padding + plotH * (yMax - output[i]) / (yMax - yMin);
+                
+                if (i === 0) ctxOut.moveTo(px, py);
+                else ctxOut.lineTo(px, py);
+            }
+            ctxOut.stroke();
+            
+            // Draw target points
+            ctxOut.fillStyle = '#c44';
+            for (let i = 0; i < targetX.length; i++) {
+                const px = padding + plotW * (targetX[i] - xMin) / (xMax - xMin);
+                const py = padding + plotH * (yMax - targetY[i]) / (yMax - yMin);
+                
+                // Draw X marker
+                ctxOut.strokeStyle = '#c44';
+                ctxOut.lineWidth = 2;
+                ctxOut.beginPath();
+                ctxOut.moveTo(px - 4, py - 4);
+                ctxOut.lineTo(px + 4, py + 4);
+                ctxOut.moveTo(px + 4, py - 4);
+                ctxOut.lineTo(px - 4, py + 4);
+                ctxOut.stroke();
+            }
+            
+            // Axis labels
+            ctxOut.fillStyle = '#666';
+            ctxOut.font = '11px sans-serif';
+            ctxOut.textAlign = 'center';
+            ctxOut.fillText(xMin.toString(), padding, height - 10);
+            ctxOut.fillText('0', x0, height - 10);
+            ctxOut.fillText(xMax.toString(), width - padding, height - 10);
+            ctxOut.textAlign = 'right';
+            ctxOut.fillText(yMax.toString(), padding - 5, padding + 5);
+            ctxOut.fillText('0', padding - 5, y0 + 4);
+            ctxOut.fillText(yMin.toString(), padding - 5, height - padding + 5);
+        }
+        
+        // Draw loss curve
+        function drawLossCurve() {
+            const width = 900, height = 200;
+            const padding = { left: 60, right: 20, top: 20, bottom: 35 };
+            const plotW = width - padding.left - padding.right;
+            const plotH = height - padding.top - padding.bottom;
+            
+            ctxLoss.clearRect(0, 0, width, height);
+            
+            if (lossHistory.length === 0) {
+                // Draw empty state
+                ctxLoss.fillStyle = '#999';
+                ctxLoss.font = '14px sans-serif';
+                ctxLoss.textAlign = 'center';
+                ctxLoss.fillText('Loss curve will appear as you run gradient descent', width/2, height/2);
+                return;
+            }
+            
+            // Determine axis ranges
+            const maxStep = Math.max(lossHistory[lossHistory.length - 1].step, 10);
+            const losses = lossHistory.map(h => h.loss);
+            const maxLoss = Math.max(...losses) * 1.1;
+            const minLoss = 0;
+            
+            // Draw grid
+            ctxLoss.strokeStyle = '#eee';
+            ctxLoss.lineWidth = 1;
+            
+            // Vertical grid lines
+            const stepInterval = maxStep <= 50 ? 10 : (maxStep <= 200 ? 25 : 50);
+            for (let s = 0; s <= maxStep; s += stepInterval) {
+                const x = padding.left + plotW * (s / maxStep);
+                ctxLoss.beginPath();
+                ctxLoss.moveTo(x, padding.top);
+                ctxLoss.lineTo(x, height - padding.bottom);
+                ctxLoss.stroke();
+            }
+            
+            // Horizontal grid lines
+            const lossInterval = maxLoss > 10 ? 5 : (maxLoss > 2 ? 1 : 0.5);
+            for (let l = 0; l <= maxLoss; l += lossInterval) {
+                const y = padding.top + plotH * (1 - l / maxLoss);
+                ctxLoss.beginPath();
+                ctxLoss.moveTo(padding.left, y);
+                ctxLoss.lineTo(width - padding.right, y);
+                ctxLoss.stroke();
+            }
+            
+            // Draw axes
+            ctxLoss.strokeStyle = '#999';
+            ctxLoss.lineWidth = 1;
+            ctxLoss.beginPath();
+            ctxLoss.moveTo(padding.left, padding.top);
+            ctxLoss.lineTo(padding.left, height - padding.bottom);
+            ctxLoss.lineTo(width - padding.right, height - padding.bottom);
+            ctxLoss.stroke();
+            
+            // Draw loss curve
+            ctxLoss.strokeStyle = '#c44';
+            ctxLoss.lineWidth = 2;
+            ctxLoss.beginPath();
+            
+            for (let i = 0; i < lossHistory.length; i++) {
+                const h = lossHistory[i];
+                const x = padding.left + plotW * (h.step / maxStep);
+                const y = padding.top + plotH * (1 - h.loss / maxLoss);
+                
+                if (i === 0) ctxLoss.moveTo(x, y);
+                else ctxLoss.lineTo(x, y);
+            }
+            ctxLoss.stroke();
+            
+            // Draw current point
+            if (lossHistory.length > 0) {
+                const last = lossHistory[lossHistory.length - 1];
+                const x = padding.left + plotW * (last.step / maxStep);
+                const y = padding.top + plotH * (1 - last.loss / maxLoss);
+                
+                ctxLoss.fillStyle = '#c44';
+                ctxLoss.beginPath();
+                ctxLoss.arc(x, y, 4, 0, Math.PI * 2);
+                ctxLoss.fill();
+            }
+            
+            // Axis labels
+            ctxLoss.fillStyle = '#666';
+            ctxLoss.font = '11px sans-serif';
+            
+            // X axis labels
+            ctxLoss.textAlign = 'center';
+            for (let s = 0; s <= maxStep; s += stepInterval) {
+                const x = padding.left + plotW * (s / maxStep);
+                ctxLoss.fillText(s.toString(), x, height - padding.bottom + 15);
+            }
+            ctxLoss.fillText('Step', width / 2, height - 5);
+            
+            // Y axis labels
+            ctxLoss.textAlign = 'right';
+            for (let l = 0; l <= maxLoss; l += lossInterval) {
+                const y = padding.top + plotH * (1 - l / maxLoss);
+                ctxLoss.fillText(l.toFixed(1), padding.left - 5, y + 4);
+            }
+            
+            // Y axis title
+            ctxLoss.save();
+            ctxLoss.translate(15, height / 2);
+            ctxLoss.rotate(-Math.PI / 2);
+            ctxLoss.textAlign = 'center';
+            ctxLoss.fillText('MSE Loss', 0, 0);
+            ctxLoss.restore();
+        }
+        
+        // Update gradient display with coloring
+        function updateGradientDisplay(id, value) {
+            const el = document.getElementById(id);
+            const sign = value >= 0 ? '+' : '';
+            el.textContent = `∂L/∂${id.replace('_grad', '')}: ${sign}${value.toFixed(2)}`;
+            el.className = 'gradient ' + (value > 0.01 ? 'positive' : (value < -0.01 ? 'negative' : ''));
+        }
+        
+        // Update all displays
+        function updateDisplay() {
+            // Update value displays
+            for (let key in params) {
+                document.getElementById(key + '_val').textContent = params[key].toFixed(1);
+            }
+            
+            // Update gradient displays
+            updateGradientDisplay('b1_grad', grads.b1);
+            updateGradientDisplay('w1_grad', grads.w1);
+            updateGradientDisplay('b2_grad', grads.b2);
+            updateGradientDisplay('w2_grad', grads.w2);
+            updateGradientDisplay('b3_grad', grads.b3);
+            updateGradientDisplay('w3_grad', grads.w3);
+            updateGradientDisplay('v1_grad', grads.v1);
+            updateGradientDisplay('v2_grad', grads.v2);
+            updateGradientDisplay('v3_grad', grads.v3);
+            updateGradientDisplay('w0_grad', grads.w0);
+            
+            // Compute activations for hidden units
+            const h1 = xPlot.map(x => relu(params.b1 + params.w1 * x));
+            const h2 = xPlot.map(x => relu(params.b2 + params.w2 * x));
+            const h3 = xPlot.map(x => relu(params.b3 + params.w3 * x));
+            
+            // Draw plots
+            drawPlot(ctx1, h1, colors[0], -5, 5, 280, 250);
+            drawPlot(ctx2, h2, colors[1], -5, 5, 280, 250);
+            drawPlot(ctx3, h3, colors[2], -5, 5, 280, 250);
+            drawOutputPlot();
+            
+            // Update RMSE
+            document.getElementById('rmse').textContent = computeRMSE().toFixed(3);
+            document.getElementById('stepCount').textContent = stepCount;
+            
+            // Draw loss curve
+            drawLossCurve();
+        }
+        
+        // Setup slider listeners
+        const sliderIds = ['b1', 'w1', 'b2', 'w2', 'b3', 'w3', 'v1', 'v2', 'v3', 'w0'];
+        sliderIds.forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                updateParamsFromSliders();
+                computeGradients();
+                updateDisplay();
+            });
+        });
+        
+        // Initial render
+        computeGradients();
+        updateDisplay();
+    </script>
+</body>
+</html>
