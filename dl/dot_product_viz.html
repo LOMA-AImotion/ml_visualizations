@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dot Product Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .controls {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .control-group {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        label {
+            font-weight: bold;
+            min-width: 80px;
+        }
+        input[type="range"] {
+            flex: 1;
+            max-width: 200px;
+        }
+        .value-display {
+            min-width: 60px;
+            font-family: monospace;
+            background: white;
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        .dot-product-display {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+            margin: 10px 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 8px;
+        }
+        #plot {
+            width: 100%;
+            aspect-ratio: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Interactive 2D Dot Product Visualization</h1>
+        <p>Explore how the dot product changes as you modify the second vector's angle and magnitude. The fixed vector is <strong>v₁ = (2, 1)</strong>.</p>
+        
+        <div class="controls">
+            <div class="control-group">
+                <label>Angle (θ):</label>
+                <input type="range" id="angleSlider" min="0" max="360" value="26.57" step="1">
+                <span class="value-display" id="angleValue">26.57°</span>
+            </div>
+            <div class="control-group">
+                <label>Magnitude:</label>
+                <input type="range" id="magnitudeSlider" min="0.5" max="4" value="2.236" step="0.1">
+                <span class="value-display" id="magnitudeValue">2.236</span>
+            </div>
+            <div class="dot-product-display" id="dotProductDisplay">
+                Dot Product: v₁ · v₂ = 5.00
+            </div>
+        </div>
+
+        <div id="plot"></div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+            <h3>Key Insights:</h3>
+            <ul>
+                <li><strong>Maximum dot product:</strong> When v₂ aligns with v₁ (same direction)</li>
+                <li><strong>Minimum dot product:</strong> When v₂ points opposite to v₁</li>
+                <li><strong>Zero dot product:</strong> When v₂ is perpendicular to v₁</li>
+                <li><strong>Formula:</strong> v₁ · v₂ = |v₁| × |v₂| × cos(θ)</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        const v1 = [2, 1];
+        const initialMagnitude = Math.sqrt(v1[0]*v1[0] + v1[1]*v1[1]);
+        const initialAngle = Math.atan2(v1[1], v1[0]) * 180 / Math.PI;
+
+        document.getElementById('angleSlider').value = initialAngle.toFixed(2);
+        document.getElementById('magnitudeSlider').value = initialMagnitude.toFixed(3);
+
+        function updateVisualization() {
+            const angle = parseFloat(document.getElementById('angleSlider').value);
+            const magnitude = parseFloat(document.getElementById('magnitudeSlider').value);
+
+            const angleRad = angle * Math.PI / 180;
+            const v2 = [magnitude * Math.cos(angleRad), magnitude * Math.sin(angleRad)];
+            const dotProduct = v1[0] * v2[0] + v1[1] * v2[1];
+
+            document.getElementById('angleValue').textContent = angle.toFixed(2) + '°';
+            document.getElementById('magnitudeValue').textContent = magnitude.toFixed(3);
+            document.getElementById('dotProductDisplay').textContent = `Dot Product: v₁ · v₂ = ${dotProduct.toFixed(2)}`;
+
+            const data = [
+                {
+                    x: [0, v1[0]],
+                    y: [0, v1[1]],
+                    mode: 'lines+markers',
+                    name: 'v₁ = (2, 1)',
+                    line: { color: 'red', width: 4 },
+                    marker: { size: 8, color: 'red' }
+                },
+                {
+                    x: [0, v2[0]],
+                    y: [0, v2[1]],
+                    mode: 'lines+markers',
+                    name: `v₂ = (${v2[0].toFixed(2)}, ${v2[1].toFixed(2)})`,
+                    line: { color: 'blue', width: 4 },
+                    marker: { size: 8, color: 'blue' }
+                },
+                {
+                    x: [0, (dotProduct / (v1[0]*v1[0] + v1[1]*v1[1])) * v1[0]],
+                    y: [0, (dotProduct / (v1[0]*v1[0] + v1[1]*v1[1])) * v1[1]],
+                    mode: 'lines',
+                    name: 'Projection',
+                    line: { color: 'green', width: 3, dash: 'dash' },
+                    showlegend: true
+                },
+                {
+                    x: [-4, -3, -2, -1, 0, 1, 2, 3, 4],
+                    y: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    mode: 'markers',
+                    marker: { size: 3, color: 'lightgray' },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                },
+                {
+                    x: [0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    y: [-4, -3, -2, -1, 0, 1, 2, 3, 4],
+                    mode: 'markers',
+                    marker: { size: 3, color: 'lightgray' },
+                    showlegend: false,
+                    hoverinfo: 'skip'
+                }
+            ];
+
+            const layout = {
+                title: {
+                    text: 'Dot Product Visualization in 2D',
+                    font: { size: 16 }
+                },
+                xaxis: {
+                    range: [-4, 4],
+                    title: 'X',
+                    zeroline: true,
+                    zerolinecolor: 'black',
+                    zerolinewidth: 2,
+                    gridcolor: 'lightgray'
+                },
+                yaxis: {
+                    range: [-4, 4],
+                    title: 'Y',
+                    zeroline: true,
+                    zerolinecolor: 'black',
+                    zerolinewidth: 2,
+                    gridcolor: 'lightgray',
+                    scaleanchor: 'x',
+                    scaleratio: 1
+                },
+                autosize: true,
+                showlegend: true,
+                legend: {
+                    x: 0.02,
+                    y: 0.98,
+                    bgcolor: 'rgba(255,255,255,0.8)'
+                },
+                annotations: [
+                    {
+                        x: v1[0] + 0.1,
+                        y: v1[1] + 0.1,
+                        text: 'v₁',
+                        showarrow: false,
+                        font: { size: 14, color: 'red' }
+                    },
+                    {
+                        x: v2[0] + 0.1,
+                        y: v2[1] + 0.1,
+                        text: 'v₂',
+                        showarrow: false,
+                        font: { size: 14, color: 'blue' }
+                    }
+                ]
+            };
+
+            const config = {
+                displayModeBar: false,
+                responsive: true
+            };
+
+            Plotly.newPlot('plot', data, layout, config);
+        }
+
+        document.getElementById('angleSlider').addEventListener('input', updateVisualization);
+        document.getElementById('magnitudeSlider').addEventListener('input', updateVisualization);
+
+        updateVisualization();
+    </script>
+</body>
+</html>

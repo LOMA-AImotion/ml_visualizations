@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Word2Vec Visualization</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+            font-weight: 300;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #7f8c8d;
+            margin-bottom: 30px;
+            font-size: 1.2em;
+        }
+        
+        .plots-container {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            height: 500px;
+        }
+        
+        .plot-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .plot-title {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        
+        .plot-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        .controls {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 15px;
+            margin-top: 20px;
+        }
+        
+        .control-section {
+            margin-bottom: 20px;
+        }
+        
+        .control-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .slider-container {
+            margin-bottom: 15px;
+        }
+        
+        .slider-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #34495e;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+        
+        .slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .button {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 1em;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+        }
+        
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(231, 76, 60, 0.4);
+        }
+        
+        .word-legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .word-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .color-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Word2Vec Visualization</h1>
+        <p class="subtitle">Interactive demonstration of dimensionality reduction and reconstruction</p>
+        
+        <div class="plots-container">
+            <div class="plot-section">
+                <div class="plot-title">Original 6D One-Hot Vectors</div>
+                <div class="plot-container" id="plot1"></div>
+            </div>
+            
+            <div class="plot-section">
+                <div class="plot-title">3D Embeddings</div>
+                <div class="plot-container" id="plot2"></div>
+            </div>
+            
+            <div class="plot-section">
+                <div class="plot-title">Reconstructed 6D Vectors</div>
+                <div class="plot-container" id="plot3"></div>
+            </div>
+        </div>
+        
+        <div class="word-legend" id="legend"></div>
+        
+        <div class="controls">
+            <div class="control-section">
+                <h3>Projection Matrix Controls</h3>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div>
+                        <h4>6D → 3D Projection</h4>
+                        <div class="slider-container">
+                            <label class="slider-label">Rotation X: <span id="rotX-val">0</span>°</label>
+                            <input type="range" class="slider" id="rotX" min="0" max="360" value="0">
+                        </div>
+                        <div class="slider-container">
+                            <label class="slider-label">Rotation Y: <span id="rotY-val">0</span>°</label>
+                            <input type="range" class="slider" id="rotY" min="0" max="360" value="0">
+                        </div>
+                        <div class="slider-container">
+                            <label class="slider-label">Scaling: <span id="scale-val">1.0</span></label>
+                            <input type="range" class="slider" id="scale" min="0.5" max="2" step="0.1" value="1">
+                        </div>
+                    </div>
+                    <div>
+                        <h4>3D → 6D Reconstruction</h4>
+                        <div class="slider-container">
+                            <label class="slider-label">Noise Level: <span id="noise-val">0.02</span></label>
+                            <input type="range" class="slider" id="noise" min="0" max="0.2" step="0.01" value="0.02">
+                        </div>
+                        <div class="slider-container">
+                            <label class="slider-label">Amplification: <span id="amp-val">1.0</span></label>
+                            <input type="range" class="slider" id="amp" min="0.5" max="2" step="0.1" value="1">
+                        </div>
+                    </div>
+                </div>
+                <button class="button" onclick="randomizeProjection()">Randomize Projection</button>
+                <button class="button" onclick="resetProjection()">Reset to Identity</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Word data
+        const words = ['dog', 'cat', 'house', 'building', 'car', 'tree'];
+        const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
+        
+        // Create one-hot vectors
+        const oneHotVectors = words.map((word, i) => {
+            const vector = new Array(6).fill(0);
+            vector[i] = 1;
+            return vector;
+        });
+        
+        // Projection matrices - designed for low reconstruction error
+        // Cat and dog will be close in 3D space (similar projections)
+        let projectionMatrix = [
+            [0.85, 0.25, 0.15],   // dog - similar to cat
+            [0.80, 0.30, 0.12],   // cat - similar to dog
+            [0.15, 0.10, 0.90],   // house - different space
+            [0.18, 0.15, 0.85],   // building - close to house
+            [0.70, 0.15, 0.25],   // car - different from animals/buildings
+            [0.25, 0.75, 0.35]    // tree - unique position
+        ];
+        
+        // Adjusted reconstruction matrix to account for the new projection
+        let reconstructionMatrix = [
+            [0.88, 0.12, 0.08, 0.10, 0.75, 0.22],   // 3D dim 1 -> 6D
+            [0.15, 0.85, 0.06, 0.12, 0.08, 0.68],   // 3D dim 2 -> 6D  
+            [0.08, 0.06, 0.92, 0.88, 0.20, 0.28]    // 3D dim 3 -> 6D
+        ];
+        
+        function matrixMultiply(A, B) {
+            const result = [];
+            for (let i = 0; i < A.length; i++) {
+                result[i] = [];
+                for (let j = 0; j < B[0].length; j++) {
+                    result[i][j] = 0;
+                    for (let k = 0; k < B.length; k++) {
+                        result[i][j] += A[i][k] * B[k][j];
+                    }
+                }
+            }
+            return result;
+        }
+        
+        function project6Dto3D(vector) {
+            const result = [0, 0, 0];
+            for (let i = 0; i < 3; i++) {
+                for (let j = 0; j < 6; j++) {
+                    result[i] += projectionMatrix[j][i] * vector[j];
+                }
+            }
+            return result;
+        }
+        
+        function reconstruct3Dto6D(vector) {
+            const result = [0, 0, 0, 0, 0, 0];
+            for (let i = 0; i < 6; i++) {
+                for (let j = 0; j < 3; j++) {
+                    result[i] += reconstructionMatrix[j][i] * vector[j];
+                }
+            }
+            return result;
+        }
+        
+        function createRotationMatrix(rotX, rotY, scale) {
+            const radX = rotX * Math.PI / 180;
+            const radY = rotY * Math.PI / 180;
+            
+            const cosX = Math.cos(radX);
+            const sinX = Math.sin(radX);
+            const cosY = Math.cos(radY);
+            const sinY = Math.sin(radY);
+            
+            // Base high-quality projection matrix - animals clustered together
+            const baseMatrix = [
+                [0.85, 0.25, 0.15],   // dog
+                [0.80, 0.30, 0.12],   // cat - close to dog
+                [0.15, 0.10, 0.90],   // house
+                [0.18, 0.15, 0.85],   // building - close to house
+                [0.70, 0.15, 0.25],   // car
+                [0.25, 0.75, 0.35]    // tree
+            ];
+            
+            // Apply rotation and scaling
+            projectionMatrix = baseMatrix.map(row => [
+                scale * (row[0] * cosY - row[1] * sinY),
+                scale * (row[0] * sinY * cosX + row[1] * cosY * cosX - row[2] * sinX),
+                scale * (row[0] * sinY * sinX + row[1] * cosY * sinX + row[2] * cosX)
+            ]);
+        }
+        
+        function updateReconstructionMatrix(noise, amp) {
+            // High-quality pseudo-inverse base
+            const baseRecon = [
+                [0.9, 0.1, 0.05, 0.05, 0.8, 0.2],   
+                [0.1, 0.9, 0.05, 0.1, 0.05, 0.7],   
+                [0.05, 0.05, 0.95, 0.85, 0.15, 0.25] 
+            ];
+            
+            reconstructionMatrix = baseRecon.map(row => 
+                row.map(val => amp * val + (Math.random() - 0.5) * noise)
+            );
+        }
+        
+        function createRadarChart(vectors, title, containerId) {
+            const traces = vectors.map((vector, i) => ({
+                type: 'scatterpolar',
+                r: vector,
+                theta: ['Dim 1', 'Dim 2', 'Dim 3', 'Dim 4', 'Dim 5', 'Dim 6'],
+                fill: 'toself',
+                name: words[i],
+                line: { color: colors[i] },
+                fillcolor: colors[i] + '40'
+            }));
+            
+            const layout = {
+                polar: {
+                    radialaxis: {
+                        visible: true,
+                        range: [0, Math.max(1.5, Math.max(...vectors.flat()))]
+                    }
+                },
+                showlegend: false,
+                margin: { t: 40, b: 40, l: 40, r: 40 }
+            };
+            
+            Plotly.newPlot(containerId, traces, layout, {responsive: true});
+        }
+        
+        function create3DScatter(embeddings, containerId) {
+            const trace = {
+                type: 'scatter3d',
+                mode: 'markers+text',
+                x: embeddings.map(e => e[0]),
+                y: embeddings.map(e => e[1]),
+                z: embeddings.map(e => e[2]),
+                text: words,
+                textposition: 'top center',
+                marker: {
+                    size: 12,
+                    color: colors,
+                    line: { width: 2, color: 'white' }
+                },
+                showlegend: false
+            };
+            
+            const layout = {
+                scene: {
+                    xaxis: { title: 'Dim 1' },
+                    yaxis: { title: 'Dim 2' },
+                    zaxis: { title: 'Dim 3' }
+                },
+                margin: { t: 40, b: 40, l: 40, r: 40 }
+            };
+            
+            Plotly.newPlot(containerId, [trace], layout, {responsive: true});
+        }
+        
+        function createLegend() {
+            const legend = document.getElementById('legend');
+            legend.innerHTML = words.map((word, i) => 
+                `<div class="word-item">
+                    <div class="color-dot" style="background-color: ${colors[i]}"></div>
+                    <span>${word}</span>
+                </div>`
+            ).join('');
+        }
+        
+        function updatePlots() {
+            // Calculate 3D embeddings
+            const embeddings = oneHotVectors.map(vector => project6Dto3D(vector));
+            
+            // Calculate reconstructed 6D vectors
+            const reconstructed = embeddings.map(embedding => reconstruct3Dto6D(embedding));
+            
+            // Update plots
+            createRadarChart(oneHotVectors, 'Original 6D One-Hot', 'plot1');
+            create3DScatter(embeddings, 'plot2');
+            createRadarChart(reconstructed, 'Reconstructed 6D', 'plot3');
+        }
+        
+        function randomizeProjection() {
+            // Random rotation
+            document.getElementById('rotX').value = Math.random() * 360;
+            document.getElementById('rotY').value = Math.random() * 360;
+            document.getElementById('scale').value = 0.5 + Math.random() * 1.5;
+            document.getElementById('noise').value = Math.random() * 0.1;  // Lower noise range
+            document.getElementById('amp').value = 0.8 + Math.random() * 0.4;  // Keep amplification reasonable
+            
+            updateControlValues();
+            updateMatrices();
+            updatePlots();
+        }
+        
+        function resetProjection() {
+            document.getElementById('rotX').value = 0;
+            document.getElementById('rotY').value = 0;
+            document.getElementById('scale').value = 1;
+            document.getElementById('noise').value = 0.02;
+            document.getElementById('amp').value = 1;
+            
+            updateControlValues();
+            updateMatrices();
+            updatePlots();
+        }
+        
+        function updateControlValues() {
+            document.getElementById('rotX-val').textContent = document.getElementById('rotX').value;
+            document.getElementById('rotY-val').textContent = document.getElementById('rotY').value;
+            document.getElementById('scale-val').textContent = parseFloat(document.getElementById('scale').value).toFixed(1);
+            document.getElementById('noise-val').textContent = parseFloat(document.getElementById('noise').value).toFixed(2);
+            document.getElementById('amp-val').textContent = parseFloat(document.getElementById('amp').value).toFixed(1);
+        }
+        
+        function updateMatrices() {
+            const rotX = parseFloat(document.getElementById('rotX').value);
+            const rotY = parseFloat(document.getElementById('rotY').value);
+            const scale = parseFloat(document.getElementById('scale').value);
+            const noise = parseFloat(document.getElementById('noise').value);
+            const amp = parseFloat(document.getElementById('amp').value);
+            
+            createRotationMatrix(rotX, rotY, scale);
+            updateReconstructionMatrix(noise, amp);
+        }
+        
+        // Event listeners
+        ['rotX', 'rotY', 'scale', 'noise', 'amp'].forEach(id => {
+            document.getElementById(id).addEventListener('input', () => {
+                updateControlValues();
+                updateMatrices();
+                updatePlots();
+            });
+        });
+        
+        // Initialize
+        createLegend();
+        updateControlValues();
+        updateMatrices();
+        updatePlots();
+    </script>
+</body>
+</html>

@@ -36,6 +36,16 @@ Interactive demonstrations of neural network training and optimization:
 - [Logistic Regression with Gradient](https://loma-aimotion.github.io/ml_visualizations/log_reg_bokeh_gradient.html) - Gradient descent for logistic regression
 - [Logistic Regression Video](https://loma-aimotion.github.io/ml_visualizations/log_reg_video.html) - Animated logistic regression training
 
+
+## 🤖 Deep Learning
+
+Advanced deep learning visualizations and concepts:
+
+- [Dot Product Visualization](https://loma-aimotion.github.io/ml_visualizations/dl/dot_product_viz.html) - Interactive dot product and vector operations
+- [Word2Vec Visualization](https://loma-aimotion.github.io/ml_visualizations/dl/word2vec_visualization.html) - Word embeddings and semantic relationships
+- [Blueking](https://loma-aimotion.github.io/ml_visualizations/dl/blueking.html) - Deep learning demonstration
+
+
 ## 🛠️ Additional Resources
 
 - [Convolution Demo](https://loma-aimotion.github.io/ml_visualizations/convolution_demo.xlsx) - Excel-based convolution demonstration

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Vector Relationship Plot</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        .description {
+            background: #f8f9ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        .vectors-info {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .vector-card {
+            background: #f0f4ff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #e0e8ff;
+        }
+        .vector-card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .vector-values {
+            font-family: monospace;
+            background: white;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+        #plot {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>3D Vector Relationships: King, Blue, and Blue King</h1>
+        
+        <div class="description">
+            <strong>Relationship:</strong> Blue King ≈ 0.8 × E(blue) + E(King)<br>
+            This demonstrates how semantic concepts can be combined through vector arithmetic, similar to word embeddings where relationships like "King - Man + Woman = Queen" emerge.
+            <div class="vector-card">
+                <h3>Normalized Sum</h3>
+                <div class="vector-values">
+                    x: 2.6<br>
+                    y: 2.0<br>
+                    z: 3.2
+                </div>
+            </div>
+        </div>
+
+        <div class="vectors-info">
+            <div class="vector-card">
+                <h3>E(King)</h3>
+                <div class="vector-values">
+                    x: 3.0<br>
+                    y: 4.0<br>
+                    z: 2.0
+                </div>
+            </div>
+            <div class="vector-card">
+                <h3>E(blue)</h3>
+                <div class="vector-values">
+                    x: 2.0<br>
+                    y: -1.0<br>
+                    z: 3.0
+                </div>
+            </div>
+            <div class="vector-card">
+                <h3>Blue King (calculated)</h3>
+                <div class="vector-values">
+                    x: 4.6<br>
+                    y: 3.2<br>
+                    z: 4.4
+                </div>
+            </div>
+        </div>
+
+        <div id="plot"></div>
+    </div>
+
+    <script>
+        // Define the vectors based on the relationships shown in the image
+        const vectors = {
+            king: [3.0, 4.0, 2.0],
+            blue: [2.0, -1.0, 3.0],
+            blue_king: [4.6, 3.2, 4.4], // 0.8 * blue + king = [1.6, -0.8, 2.4] + [3.0, 4.0, 2.0]
+            normalized_sum: [2.6, 2.0, 3.2] // 0.4 * blue + 0.6 * king = [0.8, -0.4, 1.2] + [1.8, 2.4, 1.2]
+        };
+
+        // Create arrow traces for each vector
+        const traces = [
+            // King vector
+            {
+                type: 'scatter3d',
+                mode: 'lines+markers',
+                x: [0, vectors.king[0]],
+                y: [0, vectors.king[1]],
+                z: [0, vectors.king[2]],
+                line: {
+                    color: '#ff4444',
+                    width: 8
+                },
+                marker: {
+                    size: [3, 12],
+                    color: ['#ff4444', '#ff4444'],
+                    symbol: ['circle', 'diamond']
+                },
+                name: 'E(King)',
+                hovertemplate: 'E(King)<br>x: %{x}<br>y: %{y}<br>z: %{z}<extra></extra>'
+            },
+            // Blue vector
+            {
+                type: 'scatter3d',
+                mode: 'lines+markers',
+                x: [0, vectors.blue[0]],
+                y: [0, vectors.blue[1]],
+                z: [0, vectors.blue[2]],
+                line: {
+                    color: '#4444ff',
+                    width: 8
+                },
+                marker: {
+                    size: [3, 12],
+                    color: ['#4444ff', '#4444ff'],
+                    symbol: ['circle', 'diamond']
+                },
+                name: 'E(blue)',
+                hovertemplate: 'E(blue)<br>x: %{x}<br>y: %{y}<br>z: %{z}<extra></extra>'
+            },
+            // Blue King vector
+            {
+                type: 'scatter3d',
+                mode: 'lines+markers',
+                x: [0, vectors.blue_king[0]],
+                y: [0, vectors.blue_king[1]],
+                z: [0, vectors.blue_king[2]],
+                line: {
+                    color: '#8844ff',
+                    width: 10
+                },
+                marker: {
+                    size: [3, 15],
+                    color: ['#8844ff', '#8844ff'],
+                    symbol: ['circle', 'diamond']
+                },
+                name: 'Blue King',
+                hovertemplate: 'Blue King<br>x: %{x}<br>y: %{y}<br>z: %{z}<extra></extra>'
+            },
+            // Normalized sum vector (0.4 * blue + 0.6 * king)
+            {
+                type: 'scatter3d',
+                mode: 'lines+markers',
+                x: [0, vectors.normalized_sum[0]],
+                y: [0, vectors.normalized_sum[1]],
+                z: [0, vectors.normalized_sum[2]],
+                line: {
+                    color: '#ff8844',
+                    width: 8
+                },
+                marker: {
+                    size: [3, 12],
+                    color: ['#ff8844', '#ff8844'],
+                    symbol: ['circle', 'diamond']
+                },
+                name: 'Normalized Sum (0.4×blue + 0.6×king)',
+                hovertemplate: 'Normalized Sum<br>x: %{x}<br>y: %{y}<br>z: %{z}<extra></extra>'
+            },
+            // Component vectors for visualization (0.8 * blue)
+            {
+                type: 'scatter3d',
+                mode: 'lines+markers',
+                x: [0, 0.8 * vectors.blue[0]],
+                y: [0, 0.8 * vectors.blue[1]],
+                z: [0, 0.8 * vectors.blue[2]],
+                line: {
+                    color: '#66aaff',
+                    width: 4,
+                    dash: 'dash'
+                },
+                marker: {
+                    size: [2, 8],
+                    color: ['#66aaff', '#66aaff']
+                },
+                name: '0.8 × E(blue)',
+                hovertemplate: '0.8 × E(blue)<br>x: %{x}<br>y: %{y}<br>z: %{z}<extra></extra>'
+            },
+            // Vector from 0.8*blue to blue_king (should equal king vector)
+            {
+                type: 'scatter3d',
+                mode: 'lines+markers',
+                x: [0.8 * vectors.blue[0], vectors.blue_king[0]],
+                y: [0.8 * vectors.blue[1], vectors.blue_king[1]],
+                z: [0.8 * vectors.blue[2], vectors.blue_king[2]],
+                line: {
+                    color: '#ffaa44',
+                    width: 4,
+                    dash: 'dot'
+                },
+                marker: {
+                    size: [6, 10],
+                    color: ['#ffaa44', '#ffaa44']
+                },
+                name: 'King component',
+                hovertemplate: 'King component<br>x: %{x}<br>y: %{y}<br>z: %{z}<extra></extra>'
+            }
+        ];
+
+        const layout = {
+            title: {
+                text: '3D Vector Space: Semantic Relationships',
+                font: { size: 18, color: '#333' }
+            },
+            scene: {
+                xaxis: {
+                    title: 'X Dimension',
+                    showgrid: true,
+                    gridcolor: '#e0e0e0',
+                    range: [-1, 6]
+                },
+                yaxis: {
+                    title: 'Y Dimension',
+                    showgrid: true,
+                    gridcolor: '#e0e0e0',
+                    range: [-2, 5]
+                },
+                zaxis: {
+                    title: 'Z Dimension',
+                    showgrid: true,
+                    gridcolor: '#e0e0e0',
+                    range: [-1, 5]
+                },
+                camera: {
+                    eye: { x: 1.5, y: 1.5, z: 1.2 }
+                },
+                bgcolor: '#f8f9ff'
+            },
+            paper_bgcolor: 'white',
+            plot_bgcolor: 'white',
+            showlegend: true,
+            legend: {
+                x: 0.02,
+                y: 0.98,
+                bgcolor: 'rgba(255,255,255,0.8)',
+                bordercolor: '#ccc',
+                borderwidth: 1
+            },
+            margin: { l: 0, r: 0, t: 60, b: 0 }
+        };
+
+        const config = {
+            displayModeBar: true,
+            displaylogo: false,
+            modeBarButtonsToRemove: ['pan2d', 'lasso2d', 'select2d']
+        };
+
+        Plotly.newPlot('plot', traces, layout, config);
+
+        // Add some interactivity
+        document.getElementById('plot').style.height = '600px';
+
+        // Verify the relationships mathematically
+        console.log('Verification:');
+        console.log('0.8 * E(blue) =', vectors.blue.map(x => 0.8 * x));
+        console.log('E(King) =', vectors.king);
+        console.log('Blue King sum =', [
+            0.8 * vectors.blue[0] + vectors.king[0],
+            0.8 * vectors.blue[1] + vectors.king[1],
+            0.8 * vectors.blue[2] + vectors.king[2]
+        ]);
+        console.log('Blue King =', vectors.blue_king);
+        console.log('');
+        console.log('Normalized sum calculation:');
+        console.log('0.4 * E(blue) =', vectors.blue.map(x => 0.4 * x));
+        console.log('0.6 * E(King) =', vectors.king.map(x => 0.6 * x));
+        console.log('Normalized sum =', [
+            0.4 * vectors.blue[0] + 0.6 * vectors.king[0],
+            0.4 * vectors.blue[1] + 0.6 * vectors.king[1],
+            0.4 * vectors.blue[2] + 0.6 * vectors.king[2]
+        ]);
+    </script>
+</body>
+</html>
