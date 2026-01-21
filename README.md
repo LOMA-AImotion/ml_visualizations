@@ -50,7 +50,7 @@ Advanced deep learning visualizations and concepts:
 Materials for understanding reinforcement learning fundamentals:
 
 - [Bellman Equations](https://loma-aimotion.github.io/ml_visualizations/rl/bellman.pdf) - Foundational concepts in dynamic programming and RL
-
+- [Policy Gradient Theorem](https://loma-aimotion.github.io/ml_visualizations/rl/policy_gradient.pdf) - Mathematical derivation of policy gradients
 
 ## 🛠️ Additional Resources
 
