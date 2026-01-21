@@ -45,6 +45,12 @@ Advanced deep learning visualizations and concepts:
 - [Word2Vec Visualization](https://loma-aimotion.github.io/ml_visualizations/dl/word2vec_visualization.html) - Word embeddings and semantic relationships
 - [Blueking](https://loma-aimotion.github.io/ml_visualizations/dl/blueking.html) - Deep learning demonstration
 
+## 🎮 Reinforcement Learning
+
+Materials for understanding reinforcement learning fundamentals:
+
+- [Bellman Equations](https://loma-aimotion.github.io/ml_visualizations/rl/bellman.pdf) - Foundational concepts in dynamic programming and RL
+
 
 ## 🛠️ Additional Resources
 
