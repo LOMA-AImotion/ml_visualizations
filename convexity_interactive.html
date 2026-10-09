@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Convexity Explorer</title>
+<style>
+  :root {
+    --ink: #111;
+    --muted: #777;
+    --pt: #1A4F8B;
+    --min: #D35400;
+    --ok: #2E7D32;
+    --bad: #C62828;
+    --chord: #444;
+    --grid: #ccc;
+    --panel: #f6f6f6;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 8px; }
+  .ineq { font-family: var(--math); font-size: 1.35rem; text-align: center; margin: 4px 0; }
+  .ineq i, .m i { font-style: italic; }
+  .quote { text-align: center; color: var(--muted); font-style: italic; margin: 0 0 8px; }
+  svg { width: 100%; height: auto; display: block; touch-action: none; user-select: none; }
+  svg text { font-family: var(--math); }
+  .controls {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 12px 24px; background: var(--panel); border-radius: 10px; padding: 14px 16px;
+  }
+  .ctl label { display: flex; justify-content: space-between; font-size: 0.95rem; margin-bottom: 4px; }
+  .ctl output { font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type=range] { width: 100%; }
+  .m { font-family: var(--math); font-size: 1.1rem; }
+  .readout {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 6px 24px; margin: 12px 0; font-size: 1.05rem;
+  }
+  .readout div { font-variant-numeric: tabular-nums; }
+  .status { font-weight: 600; }
+  .status.ok { color: var(--ok); }
+  .status.bad { color: var(--bad); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer;
+  }
+  button:hover { background: #eee; }
+  .hint { color: var(--muted); font-size: 0.9rem; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Convexity of the loss function</h1>
+  <div class="ineq">
+    <i>λ f</i>(<i>x</i>) + (1 − <i>λ</i>) <i>f</i>(<i>y</i>) &nbsp;≥&nbsp; <i>f</i>(<i>λ x</i> + (1 − <i>λ</i>) <i>y</i>)
+    &nbsp;&nbsp;&nbsp; ∀ <i>x</i>, <i>y</i> ∈ <i>X</i>, &nbsp;<i>λ</i> ∈ [0, 1]
+  </div>
+  <p class="quote">“The line between any two points never lies below the curve.”</p>
+
+  <svg id="plot" viewBox="0 0 1000 500" aria-label="Loss curve with chord between two points"></svg>
+
+  <div class="readout">
+    <div class="m"><i>λ f</i>(<i>x</i>) + (1 − <i>λ</i>) <i>f</i>(<i>y</i>) = <span id="rChord"></span></div>
+    <div class="m"><i>f</i>(<i>λ x</i> + (1 − <i>λ</i>) <i>y</i>) = <span id="rCurve"></span></div>
+    <div>At this <span class="m"><i>λ</i></span>: <span id="rPoint" class="status"></span></div>
+    <div>Whole chord: <span id="rChordAll" class="status"></span></div>
+  </div>
+
+  <div class="controls">
+    <div class="ctl">
+      <label for="sx"><span class="m"><i>x</i></span><output id="ox"></output></label>
+      <input id="sx" type="range" min="0" max="10" step="0.01" value="1.3">
+    </div>
+    <div class="ctl">
+      <label for="sy"><span class="m"><i>y</i></span><output id="oy"></output></label>
+      <input id="sy" type="range" min="0" max="10" step="0.01" value="9">
+    </div>
+    <div class="ctl">
+      <label for="sl"><span class="m"><i>λ</i></span><output id="ol"></output></label>
+      <input id="sl" type="range" min="0" max="1" step="0.01" value="0.2">
+    </div>
+    <div class="ctl">
+      <label for="sa"><span>Non-convexity <span class="m"><i>α</i></span></span><output id="oa"></output></label>
+      <input id="sa" type="range" min="0" max="1" step="0.01" value="0">
+    </div>
+    <div class="buttons">
+      <button id="bSweep">Sweep λ</button>
+      <button id="bConvex">Convex example</button>
+      <button id="bNonConvex">Non-convex example</button>
+    </div>
+  </div>
+  <p class="hint">Tip: drag the blue points on the plot directly: the endpoints move <i>x</i> and <i>y</i>, the middle points move <i>λ</i>.</p>
+</main>
+
+<script>
+(() => {
+  // Loss curve: same functions as convexity.py
+  const fConvex = t => 0.06 * (t - 6) ** 2 + 0.25 * Math.exp(0.6 * (t - 6)) + 1;
+  const bumps = t => -0.6 * Math.exp(-((t - 1.9) ** 2) / 0.35) + 0.8 * Math.exp(-((t - 3.3) ** 2) / 0.6);
+
+  const state = { x: 1.3, y: 9, lam: 0.2, alpha: 0 };
+  const f = t => fConvex(t) + state.alpha * bumps(t);
+
+  // Plot coordinates: t in [0, 10], loss in [0, 5]
+  const L = 70, R = 950, T = 20, B = 420;
+  const px = t => L + (R - L) * t / 10;
+  const py = v => B - (B - T) * v / 5;
+  const tOf = X => Math.min(10, Math.max(0, (X - L) / (R - L) * 10));
+
+  const svg = document.getElementById("plot");
+  const C = getComputedStyle(document.documentElement);
+  const col = name => C.getPropertyValue(name).trim();
+
+  const mix = () => state.lam * state.x + (1 - state.lam) * state.y;
+  const chordVal = lam => lam * f(state.x) + (1 - lam) * f(state.y);
+
+  function minima() {
+    const n = 2000, ts = [], vs = [];
+    for (let i = 0; i <= n; i++) { const t = 10 * i / n; ts.push(t); vs.push(f(t)); }
+    let g = 0;
+    vs.forEach((v, i) => { if (v < vs[g]) g = i; });
+    const local = [];
+    for (let i = 1; i < n; i++) {
+      if (vs[i] < vs[i - 1] && vs[i] <= vs[i + 1] && i !== g) local.push(ts[i]);
+    }
+    return { global: ts[g], local };
+  }
+
+  const esc = s => s;
+  const text = (x, y, s, opts = {}) =>
+    `<text x="${x}" y="${y}" font-size="${opts.size || 20}" fill="${opts.fill || col("--ink")}" ` +
+    `text-anchor="${opts.anchor || "middle"}" font-style="${opts.italic === false ? "normal" : "italic"}">${esc(s)}</text>`;
+  const line = (x1, y1, x2, y2, stroke, w = 2, dash = "") =>
+    `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${stroke}" stroke-width="${w}" ` +
+    (dash ? `stroke-dasharray="${dash}" ` : "") + `stroke-linecap="round"/>`;
+  const dot = (x, y, r, fill) => `<circle cx="${x}" cy="${y}" r="${r}" fill="${fill}"/>`;
+
+  function render() {
+    const { x, y, lam } = state;
+    const z = mix();
+    const fx = f(x), fy = f(y), fz = f(z), cz = chordVal(lam);
+    const above = cz >= fz - 1e-9;
+    let s = "";
+
+    // Model-space baseline
+    s += line(px(0), B, px(10), B, col("--muted"), 2);
+    s += text(px(10), B + 62, "model space", { size: 15, fill: col("--muted"), anchor: "end", italic: false });
+
+    // Loss curve
+    let d = "";
+    for (let i = 0; i <= 400; i++) {
+      const t = 10 * i / 400;
+      d += (i ? "L" : "M") + px(t).toFixed(1) + "," + py(f(t)).toFixed(1);
+    }
+    s += `<path d="${d}" fill="none" stroke="${col("--ink")}" stroke-width="3.5"/>`;
+    s += text(px(0.35), py(f(0.35)) - 18, "loss surface", { size: 16, italic: false, anchor: "start" });
+
+    // Chord, red where it dips below the curve
+    s += line(px(x), py(fx), px(y), py(fy), col("--chord"), 3);
+    const n = 200;
+    let seg = null;
+    let anyBelow = false;
+    for (let i = 0; i <= n; i++) {
+      const l = i / n, t = l * x + (1 - l) * y, c = chordVal(l);
+      const below = c < f(t) - 1e-6;
+      if (below) {
+        anyBelow = true;
+        const pt = `${px(t).toFixed(1)},${py(c).toFixed(1)}`;
+        seg = seg ? seg + " " + pt : pt;
+      }
+      if ((!below || i === n) && seg) {
+        s += `<polyline points="${seg}" fill="none" stroke="${col("--bad")}" stroke-width="5" stroke-linecap="round"/>`;
+        seg = null;
+      }
+    }
+
+    // Minima
+    const mins = minima();
+    s += dot(px(mins.global), py(f(mins.global)), 8, col("--min"));
+    // placed lower than the f(x)/f(y) labels so they don't collide when an endpoint sits at the minimum
+    s += text(px(mins.global), py(f(mins.global)) + 58, "global minimum",
+              { size: 18, fill: col("--min"), italic: false });
+    mins.local.forEach(t => {
+      s += dot(px(t), py(f(t)), 8, col("--bad"));
+      s += text(px(t) - 14, py(f(t)) + 6, "local minimum", { size: 18, fill: col("--bad"), anchor: "end", italic: false });
+    });
+
+    // Endpoints x, y
+    [[x, "x", -1], [y, "y", 1]].forEach(([t, name, side]) => {
+      s += line(px(t), B, px(t), py(f(t)), col("--grid"), 1.5, "4 4");
+      s += line(px(t), B - 7, px(t), B + 7, col("--muted"), 2);
+      s += text(px(t), B + 28, name, { size: 22 });
+      s += dot(px(t), py(f(t)), 8, col("--pt"));
+      s += text(px(t) + side * 16, py(f(t)) + 30, `f(${name})`, { size: 20, anchor: side < 0 ? "end" : "start" });
+    });
+
+    // Mixed point on chord and on curve, with the gap between them
+    s += line(px(z), B, px(z), py(Math.min(fz, cz)), col("--grid"), 1.5, "4 4");
+    s += line(px(z), B - 7, px(z), B + 7, col("--muted"), 2);
+    s += text(px(z), B + 46, "λx + (1−λ)y", { size: 16 });
+    s += line(px(z), py(fz), px(z), py(cz), above ? col("--ok") : col("--bad"), 5);
+    s += dot(px(z), py(cz), 7, col("--pt"));
+    s += dot(px(z), py(fz), 7, col("--pt"));
+    const chordLbl = "λf(x) + (1−λ)f(y)", curveLbl = "f(λx + (1−λ)y)";
+    if (above) {
+      s += text(px(z), py(cz) - 16, chordLbl, { size: 17 });
+      s += text(px(z) + 12, py(fz) + 26, curveLbl, { size: 17, anchor: "start" });
+    } else {
+      s += text(px(z) + 12, py(cz) + 26, chordLbl, { size: 17, anchor: "start" });
+      s += text(px(z), py(fz) - 16, curveLbl, { size: 17 });
+    }
+
+    svg.innerHTML = s;
+
+    // Readouts
+    const fmt = v => v.toFixed(3);
+    document.getElementById("rChord").textContent = fmt(cz);
+    document.getElementById("rCurve").textContent = fmt(fz);
+    const rp = document.getElementById("rPoint");
+    rp.textContent = above ? `inequality holds (gap ${fmt(cz - fz)}) ✓` : `inequality violated (gap ${fmt(cz - fz)}) ✗`;
+    rp.className = "status " + (above ? "ok" : "bad");
+    const ra = document.getElementById("rChordAll");
+    ra.textContent = anyBelow ? "dips below the curve somewhere → not convex ✗" : "never below the curve ✓";
+    ra.className = "status " + (anyBelow ? "bad" : "ok");
+
+    for (const [k, id, dec] of [["x", "x", 2], ["y", "y", 2], ["lam", "l", 2], ["alpha", "a", 2]]) {
+      document.getElementById("s" + id).value = state[k];
+      document.getElementById("o" + id).textContent = state[k].toFixed(dec);
+    }
+  }
+
+  // Sliders
+  for (const [k, id] of [["x", "x"], ["y", "y"], ["lam", "l"], ["alpha", "a"]]) {
+    document.getElementById("s" + id).addEventListener("input", e => {
+      state[k] = parseFloat(e.target.value);
+      render();
+    });
+  }
+
+  // Dragging on the plot: pick the nearest handle
+  let drag = null;
+  const toSvg = e => {
+    const p = svg.createSVGPoint();
+    p.x = e.clientX; p.y = e.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
+  };
+  svg.addEventListener("pointerdown", e => {
+    const p = toSvg(e), z = mix();
+    const handles = [
+      ["x", px(state.x), py(f(state.x))], ["x", px(state.x), B],
+      ["y", px(state.y), py(f(state.y))], ["y", px(state.y), B],
+      ["lam", px(z), py(chordVal(state.lam))], ["lam", px(z), py(f(z))], ["lam", px(z), B],
+    ];
+    let best = null, bestD = 35;
+    for (const [k, hx, hy] of handles) {
+      const dd = Math.hypot(p.x - hx, p.y - hy);
+      if (dd < bestD) { best = k; bestD = dd; }
+    }
+    if (best) { drag = best; svg.setPointerCapture(e.pointerId); e.preventDefault(); }
+  });
+  svg.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const t = tOf(toSvg(e).x);
+    if (drag === "lam") {
+      if (Math.abs(state.y - state.x) > 1e-6) {
+        state.lam = Math.min(1, Math.max(0, (state.y - t) / (state.y - state.x)));
+      }
+    } else {
+      state[drag] = t;
+    }
+    render();
+  });
+  const endDrag = () => { drag = null; };
+  svg.addEventListener("pointerup", endDrag);
+  svg.addEventListener("pointercancel", endDrag);
+
+  // Animations
+  let anim = null;
+  function animateTo(target, ms) {
+    cancelAnimationFrame(anim);
+    const start = { ...state }, t0 = performance.now();
+    const ease = u => u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+    return new Promise(done => {
+      const step = now => {
+        const u = Math.min(1, (now - t0) / ms), e = ease(u);
+        for (const k in target) state[k] = start[k] + (target[k] - start[k]) * e;
+        render();
+        if (u < 1) anim = requestAnimationFrame(step); else done();
+      };
+      anim = requestAnimationFrame(step);
+    });
+  }
+  document.getElementById("bSweep").addEventListener("click", async () => {
+    const back = state.lam;
+    await animateTo({ lam: 1 }, 1000);
+    await animateTo({ lam: 0 }, 2000);
+    await animateTo({ lam: back }, 1000);
+  });
+  document.getElementById("bConvex").addEventListener("click", () =>
+    animateTo({ alpha: 0, x: 1.3, y: 9, lam: 0.2 }, 1200));
+  document.getElementById("bNonConvex").addEventListener("click", () => {
+    // x in the local minimum, y in the global one, lambda so the mixed point sits on the hump
+    const prev = state.alpha;
+    state.alpha = 1;
+    const m = minima();
+    state.alpha = prev;
+    const xl = m.local[0], xg = m.global, hump = 3.2;
+    animateTo({ alpha: 1, x: xl, y: xg, lam: (xg - hump) / (xg - xl) }, 1500);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>

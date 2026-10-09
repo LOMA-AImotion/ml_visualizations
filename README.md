@@ -2,6 +2,12 @@
 
 Interactive visualizations for teaching machine learning concepts, developed at AImotion Bavaria (Technische Hochschule Ingolstadt).
 
+## 📐 Mathematical Basics
+
+Foundational mathematical concepts for machine learning and optimization:
+
+- [Convexity Explorer](https://loma-aimotion.github.io/ml_visualizations/convexity_interactive.html) - Interactive exploration of convexity of loss functions
+
 ## 📊 Probability Theory
 
 Interactive demonstrations of fundamental probability distributions and concepts:
