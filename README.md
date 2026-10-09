@@ -31,16 +31,23 @@ Visualizations for statistical inference and sampling concepts:
 - [Central Limit Theorem](https://loma-aimotion.github.io/ml_visualizations/central_limit_theorem.html) - Interactive demonstration of the CLT
 
 
+## 📉 Basic Machine Learning
+
+Linear and logistic regression, their loss functions and training:
+
+- [Squared Error Explorer](https://loma-aimotion.github.io/ml_visualizations/linreg_loss_interactive.html) - Drag a regression line and see the squared errors, SSE, MSE and RMSE of linear regression
+- [Logistic Regression 2D](https://loma-aimotion.github.io/ml_visualizations/log_reg2d.html) - Two-dimensional logistic regression
+- [Logistic Regression (Bokeh)](https://loma-aimotion.github.io/ml_visualizations/log_reg_bokeh.html) - Interactive logistic regression with Bokeh
+- [Logistic Regression with Gradient](https://loma-aimotion.github.io/ml_visualizations/log_reg_bokeh_gradient.html) - Gradient descent for logistic regression
+- [Logistic Regression Video](https://loma-aimotion.github.io/ml_visualizations/log_reg_video.html) - Animated logistic regression training
+
+
 ## 🧠 Neural Networks
 
 Interactive demonstrations of neural network training and optimization:
 
 - [Shallow Neural Network](https://loma-aimotion.github.io/ml_visualizations/shallow_neural_network.html) - Basic neural network architecture visualization
 - [Shallow Neural Network with Gradient Descent](https://loma-aimotion.github.io/ml_visualizations/shallow_neural_network_grad_descent.html) - Training visualization with gradient descent
-- [Logistic Regression 2D](https://loma-aimotion.github.io/ml_visualizations/log_reg2d.html) - Two-dimensional logistic regression
-- [Logistic Regression (Bokeh)](https://loma-aimotion.github.io/ml_visualizations/log_reg_bokeh.html) - Interactive logistic regression with Bokeh
-- [Logistic Regression with Gradient](https://loma-aimotion.github.io/ml_visualizations/log_reg_bokeh_gradient.html) - Gradient descent for logistic regression
-- [Logistic Regression Video](https://loma-aimotion.github.io/ml_visualizations/log_reg_video.html) - Animated logistic regression training
 
 
 ## 🤖 Deep Learning

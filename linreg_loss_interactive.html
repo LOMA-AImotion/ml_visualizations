@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Squared Error Explorer</title>
+<style>
+  :root {
+    --ink: #111;
+    --muted: #777;
+    --w0: #1565C0;
+    --w1: #C62828;
+    --y: #0AA5E0;
+    --pred: #F57C00;
+    --pt: #0D5C9E;
+    --resid: #444;
+    --sq: rgba(245, 124, 0, 0.16);
+    --sq-stroke: rgba(245, 124, 0, 0.7);
+    --hl: #FFF4E5;
+    --panel: #f6f6f6;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1250px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 6px; }
+  .m { font-family: var(--math); }
+  .m i { font-style: italic; }
+  .w0 { color: var(--w0); }
+  .w1 { color: var(--w1); }
+  .yv { color: var(--y); }
+  .pv { color: var(--pred); }
+  .formula { font-size: 1.35rem; margin: 6px 0 12px; text-align: center; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  svg { width: 100%; height: auto; display: block; touch-action: none; user-select: none; }
+  svg text { font-family: system-ui, sans-serif; }
+  .params {
+    display: grid; grid-template-columns: auto 1fr 5.5em; gap: 10px 12px; align-items: center;
+    background: var(--panel); border-radius: 10px; padding: 12px 16px; margin-bottom: 12px;
+  }
+  .params .name { font-family: var(--math); font-size: 1.4rem; font-style: italic; }
+  .params input[type=number] { width: 100%; font: inherit; padding: 3px 6px; text-align: right; }
+  input[type=range] { width: 100%; }
+  .buttons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer;
+  }
+  button:hover { background: #eee; }
+  label.check { display: inline-flex; gap: 6px; align-items: center; margin-left: auto; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: 5px 8px; text-align: right; border-bottom: 1px solid #e3e3e3; }
+  th { font-weight: 600; font-family: var(--math); font-size: 1.05rem; }
+  th:first-child, td:first-child { text-align: center; }
+  tbody tr { cursor: default; }
+  tbody tr.hl { background: var(--hl); }
+  .neg { color: var(--w1); }
+  .expanded { font-family: var(--math); font-size: 1.15rem; line-height: 1.7; margin: 14px 0 6px; }
+  .expanded .term { white-space: nowrap; }
+  .metrics {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px;
+  }
+  .metric { background: var(--panel); border-radius: 10px; padding: 10px 12px; }
+  .metric .lbl { font-size: 0.85rem; color: var(--muted); }
+  .metric .val { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .metric .def { font-family: var(--math); font-size: 0.95rem; margin-top: 2px; }
+  .hint { color: var(--muted); font-size: 0.9rem; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Visually, what are we calculating?</h1>
+  <div class="formula m">
+    min&nbsp; <i>L</i>(<i class="w0">w</i><sub class="w0">0</sub>, <i class="w1">w</i><sub class="w1">1</sub>)
+    = <span style="font-size:1.4em">∑</span><sub style="font-size:0.6em">⟨<i>x</i><sup>(<i>i</i>)</sup>, <i>y</i><sup>(<i>i</i>)</sup>⟩ ∈ <i>D</i></sub>
+    (<i class="yv">y</i><sup class="yv">(<i>i</i>)</sup> − (<i class="w1">w</i><sub class="w1">1</sub> · <i>x</i><sup>(<i>i</i>)</sup>
+    + <i class="w0">w</i><sub class="w0">0</sub>))<sup>2</sup>
+  </div>
+
+  <div class="layout">
+    <div>
+      <div class="params">
+        <span class="name w0">w<sub>0</sub></span>
+        <input id="r0" type="range" min="-1" max="3" step="0.01">
+        <input id="n0" type="number" min="-1" max="3" step="0.01">
+        <span class="name w1">w<sub>1</sub></span>
+        <input id="r1" type="range" min="-1" max="2" step="0.01">
+        <input id="n1" type="number" min="-1" max="2" step="0.01">
+        <div class="buttons">
+          <button id="bReset">Reset (1, 0.3)</button>
+          <button id="bFit">Least-squares fit</button>
+          <label class="check"><input id="cSq" type="checkbox"> show squared errors as squares</label>
+        </div>
+      </div>
+      <svg id="plot" viewBox="0 0 640 465" aria-label="Data points, regression line and residuals"></svg>
+      <p class="hint">Drag the orange handles: the left one changes the intercept <span class="m"><i class="w0">w</i><sub class="w0">0</sub></span>,
+        the right one the slope <span class="m"><i class="w1">w</i><sub class="w1">1</sub></span>. Hover a point or a table row to highlight it.</p>
+    </div>
+
+    <div>
+      <table>
+        <thead>
+          <tr>
+            <th><i>i</i></th>
+            <th><i>x</i><sup>(<i>i</i>)</sup></th>
+            <th class="yv"><i>y</i><sup>(<i>i</i>)</sup></th>
+            <th class="pv"><i>ŷ</i><sup>(<i>i</i>)</sup> = <i class="w1">w</i><sub class="w1">1</sub><i>x</i><sup>(<i>i</i>)</sup> + <i class="w0">w</i><sub class="w0">0</sub></th>
+            <th>error <i>y</i><sup>(<i>i</i>)</sup> − <i>ŷ</i><sup>(<i>i</i>)</sup></th>
+            <th>squared</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <div class="expanded" id="expanded"></div>
+
+      <div class="metrics">
+        <div class="metric">
+          <div class="lbl">Sum of squared errors</div>
+          <div class="val" id="sse"></div>
+          <div class="def">SSE = ∑ (<i>y</i><sup>(<i>i</i>)</sup> − <i>ŷ</i><sup>(<i>i</i>)</sup>)<sup>2</sup></div>
+        </div>
+        <div class="metric">
+          <div class="lbl">Mean squared error</div>
+          <div class="val" id="mse"></div>
+          <div class="def">MSE = SSE / <i>n</i></div>
+        </div>
+        <div class="metric">
+          <div class="lbl">Root mean squared error</div>
+          <div class="val" id="rmse"></div>
+          <div class="def">RMSE = √MSE</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const X = [1, 2.5, 3, 3.4, 4];
+  const Y = [1, 1.4, 2.5, 1.9, 3.2];
+  const n = X.length;
+  const state = { w0: 1, w1: 0.3, hl: -1, squares: false };
+
+  // Closed-form least squares
+  const mx = X.reduce((a, b) => a + b) / n, my = Y.reduce((a, b) => a + b) / n;
+  const sxy = X.reduce((s, x, i) => s + (x - mx) * (Y[i] - my), 0);
+  const sxx = X.reduce((s, x) => s + (x - mx) ** 2, 0);
+  const fitW1 = sxy / sxx, fitW0 = my - fitW1 * mx;
+
+  // Plot: equal scale on both axes so squared errors are true squares
+  const XMIN = 0, XMAX = 5, YMIN = 0, YMAX = 3.6;
+  const L = 55, T = 15, U = 110;            // left, top, pixels per unit
+  const px = x => L + (x - XMIN) * U;
+  const py = y => T + (YMAX - y) * U;
+  const B = py(YMIN), R = px(XMAX);
+  const xOf = P => XMIN + (P - L) / U;
+  const yOf = P => YMAX - (P - T) / U;
+
+  const svg = document.getElementById("plot");
+  const css = getComputedStyle(document.documentElement);
+  const col = v => css.getPropertyValue(v).trim();
+  const f2 = v => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2);
+  const pred = x => state.w1 * x + state.w0;
+
+  function clipLine() {
+    // segment of y = w1 x + w0 inside the plot box
+    const pts = [];
+    const add = (x, y) => { if (x >= XMIN - 1e-9 && x <= XMAX + 1e-9 && y >= YMIN - 1e-9 && y <= YMAX + 1e-9) pts.push([x, y]); };
+    add(XMIN, pred(XMIN)); add(XMAX, pred(XMAX));
+    if (Math.abs(state.w1) > 1e-9) {
+      add((YMIN - state.w0) / state.w1, YMIN);
+      add((YMAX - state.w0) / state.w1, YMAX);
+    }
+    pts.sort((a, b) => a[0] - b[0]);
+    return pts.length >= 2 ? [pts[0], pts[pts.length - 1]] : null;
+  }
+
+  function renderPlot() {
+    let s = "";
+    // grid and axes
+    for (let x = 0; x <= XMAX; x += 1) {
+      s += `<line x1="${px(x)}" y1="${T}" x2="${px(x)}" y2="${B}" stroke="#eee"/>`;
+      s += `<text x="${px(x)}" y="${B + 22}" font-size="15" text-anchor="middle" fill="${col("--muted")}">${x}</text>`;
+    }
+    for (let y = 0; y <= YMAX + 1e-9; y += 0.5) {
+      s += `<line x1="${L}" y1="${py(y)}" x2="${R}" y2="${py(y)}" stroke="#eee"/>`;
+      s += `<text x="${L - 8}" y="${py(y) + 5}" font-size="15" text-anchor="end" fill="${col("--muted")}">${y.toFixed(1)}</text>`;
+    }
+    s += `<line x1="${L}" y1="${B}" x2="${R}" y2="${B}" stroke="#555" stroke-width="1.5"/>`;
+    s += `<line x1="${L}" y1="${T}" x2="${L}" y2="${B}" stroke="#555" stroke-width="1.5"/>`;
+    s += `<text x="${R}" y="${B + 42}" font-size="16" text-anchor="end" font-style="italic" font-family="serif">x</text>`;
+    s += `<text x="${L - 40}" y="${T + 10}" font-size="16" font-style="italic" font-family="serif">y</text>`;
+
+    s += `<defs><clipPath id="box"><rect x="${L}" y="${T}" width="${R - L}" height="${B - T}"/></clipPath>
+          <filter id="glow" x="-1" y="-1" width="3" height="3"><feGaussianBlur stdDeviation="5"/></filter></defs>`;
+    s += `<g clip-path="url(#box)">`;
+
+    // squared errors as squares (drawn on the side away from the line's slope crowding: to the right)
+    if (state.squares) {
+      X.forEach((x, i) => {
+        const e = Y[i] - pred(x), side = Math.abs(e) * U;
+        const top = py(Math.max(Y[i], pred(x)));
+        s += `<rect x="${px(x)}" y="${top}" width="${side}" height="${side}" fill="${col("--sq")}" ` +
+             `stroke="${col("--sq-stroke")}" stroke-width="${i === state.hl ? 2.5 : 1}"/>`;
+      });
+    }
+
+    // residuals
+    X.forEach((x, i) => {
+      s += `<line x1="${px(x)}" y1="${py(Y[i])}" x2="${px(x)}" y2="${py(pred(x))}" stroke="${col("--resid")}" ` +
+           `stroke-width="${i === state.hl ? 4 : 3}" stroke-dasharray="8 6"/>`;
+    });
+
+    // regression line
+    const seg = clipLine();
+    if (seg) {
+      s += `<line x1="${px(seg[0][0])}" y1="${py(seg[0][1])}" x2="${px(seg[1][0])}" y2="${py(seg[1][1])}" ` +
+           `stroke="${col("--pred")}" stroke-width="4" stroke-linecap="round"/>`;
+    }
+    // predicted values on the line
+    X.forEach(x => { s += `<circle cx="${px(x)}" cy="${py(pred(x))}" r="4" fill="${col("--pred")}"/>`; });
+    s += `</g>`;
+
+    // data points with glow
+    X.forEach((x, i) => {
+      if (i === state.hl) s += `<circle cx="${px(x)}" cy="${py(Y[i])}" r="16" fill="${col("--y")}" opacity="0.55" filter="url(#glow)"/>`;
+      s += `<circle class="pt" data-i="${i}" cx="${px(x)}" cy="${py(Y[i])}" r="${i === state.hl ? 10 : 8}" fill="${col("--pt")}"/>`;
+    });
+    if (state.hl >= 0) {
+      const x = X[state.hl], e = Y[state.hl] - pred(x);
+      s += `<text x="${px(x) + 14}" y="${py((Y[state.hl] + pred(x)) / 2) + 5}" font-size="15" fill="${col("--resid")}">` +
+           `error ${f2(e)}</text>`;
+    }
+
+    // drag handles at the left and right edge of the visible line
+    const hx0 = XMIN + 0.02, hx1 = XMAX - 0.02;
+    [[hx0, "w0"], [hx1, "w1"]].forEach(([x, k]) => {
+      const y = Math.min(YMAX, Math.max(YMIN, pred(x)));
+      s += `<circle cx="${px(x)}" cy="${py(y)}" r="9" fill="#fff" stroke="${col("--pred")}" stroke-width="3" style="cursor:grab"/>`;
+    });
+
+    svg.innerHTML = s;
+  }
+
+  function renderTable() {
+    const rows = document.getElementById("rows");
+    let sse = 0, html = "", terms = [];
+    X.forEach((x, i) => {
+      const p = pred(x), e = Y[i] - p, sq = e * e;
+      sse += sq;
+      html += `<tr data-i="${i}" class="${i === state.hl ? "hl" : ""}">` +
+        `<td>${i + 1}</td><td>${x}</td><td class="yv">${Y[i]}</td><td class="pv">${f2(p)}</td>` +
+        `<td class="${e < 0 ? "neg" : ""}">${f2(e)}</td><td>${sq.toFixed(4)}</td></tr>`;
+      const term = `<span class="term">(<span class="yv">${Y[i]}</span> − <span class="pv">${f2(p)}</span>)<sup>2</sup></span>`;
+      terms.push(i === state.hl ? `<span style="background:var(--hl)">${term}</span>` : term);
+    });
+    rows.innerHTML = html;
+    document.getElementById("expanded").innerHTML = "SSE = " + terms.join(" + ") + ` = <b>${sse.toFixed(4)}</b>`;
+    const mse = sse / n;
+    document.getElementById("sse").textContent = sse.toFixed(4);
+    document.getElementById("mse").textContent = mse.toFixed(4);
+    document.getElementById("rmse").textContent = Math.sqrt(mse).toFixed(4);
+  }
+
+  function syncInputs() {
+    for (const [k, id] of [["w0", "0"], ["w1", "1"]]) {
+      document.getElementById("r" + id).value = state[k];
+      const num = document.getElementById("n" + id);
+      if (document.activeElement !== num) num.value = state[k].toFixed(2);
+    }
+  }
+
+  function render() {
+    renderPlot(); renderTable(); syncInputs();
+    document.getElementById("cSq").checked = state.squares;
+  }
+
+  // Inputs
+  for (const [k, id] of [["w0", "0"], ["w1", "1"]]) {
+    const r = document.getElementById("r" + id), num = document.getElementById("n" + id);
+    r.addEventListener("input", () => { state[k] = parseFloat(r.value); render(); });
+    num.addEventListener("input", () => {
+      const v = parseFloat(num.value);
+      if (!Number.isNaN(v)) { state[k] = v; render(); }
+    });
+    num.addEventListener("change", () => syncInputs());
+  }
+  document.getElementById("cSq").addEventListener("change", e => { state.squares = e.target.checked; render(); });
+
+  // Highlighting from table rows and points
+  const rowsEl = document.getElementById("rows");
+  rowsEl.addEventListener("mouseover", e => {
+    const tr = e.target.closest("tr");
+    if (tr && +tr.dataset.i !== state.hl) { state.hl = +tr.dataset.i; render(); }
+  });
+  rowsEl.addEventListener("mouseleave", () => { state.hl = -1; render(); });
+
+  // Plot interaction: drag handles, hover points
+  let drag = null;
+  const toSvg = e => {
+    const p = svg.createSVGPoint();
+    p.x = e.clientX; p.y = e.clientY;
+    return p.matrixTransform(svg.getScreenCTM().inverse());
+  };
+  const near = (p, x, y, r) => Math.hypot(p.x - px(x), p.y - py(y)) < r;
+  svg.addEventListener("pointerdown", e => {
+    const p = toSvg(e);
+    const y0 = Math.min(YMAX, Math.max(YMIN, pred(XMIN))), y1 = Math.min(YMAX, Math.max(YMIN, pred(XMAX)));
+    if (near(p, XMIN, y0, 25)) drag = "w0";
+    else if (near(p, XMAX, y1, 25)) drag = "w1";
+    if (drag) { svg.setPointerCapture(e.pointerId); e.preventDefault(); }
+  });
+  svg.addEventListener("pointermove", e => {
+    const p = toSvg(e);
+    if (drag === "w0") {
+      // move the intercept, keep the slope
+      state.w0 = Math.round(Math.min(3, Math.max(-1, yOf(p.y))) * 100) / 100;
+      render();
+    } else if (drag === "w1") {
+      // rotate around the intercept: the line passes through (XMAX, pointer y)
+      const w1 = (yOf(p.y) - state.w0) / (XMAX - XMIN);
+      state.w1 = Math.round(Math.min(2, Math.max(-1, w1)) * 100) / 100;
+      render();
+    } else {
+      let hit = -1;
+      X.forEach((x, i) => { if (near(p, x, Y[i], 18)) hit = i; });
+      if (hit !== state.hl) { state.hl = hit; render(); }
+    }
+  });
+  const endDrag = () => { drag = null; };
+  svg.addEventListener("pointerup", endDrag);
+  svg.addEventListener("pointercancel", endDrag);
+  svg.addEventListener("pointerleave", () => { if (!drag && state.hl !== -1) { state.hl = -1; render(); } });
+
+  // Animated parameter changes
+  let anim = null;
+  function animateTo(w0, w1, ms = 900) {
+    cancelAnimationFrame(anim);
+    const s0 = state.w0, s1 = state.w1, t0 = performance.now();
+    const ease = u => u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+    const step = now => {
+      const u = Math.min(1, (now - t0) / ms), k = ease(u);
+      state.w0 = s0 + (w0 - s0) * k;
+      state.w1 = s1 + (w1 - s1) * k;
+      render();
+      if (u < 1) anim = requestAnimationFrame(step);
+    };
+    anim = requestAnimationFrame(step);
+  }
+  document.getElementById("bReset").addEventListener("click", () => animateTo(1, 0.3));
+  document.getElementById("bFit").addEventListener("click", () => animateTo(fitW0, fitW1));
+
+  render();
+})();
+</script>
+</body>
+</html>
