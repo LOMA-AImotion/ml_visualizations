@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Squared Error vs Likelihood</title>
+<style>
+  :root {
+    --ink: #111;
+    --muted: #777;
+    --z: #8E24AA;
+    --p: #F57C00;
+    --male: #2A93C2;
+    --female: #C0392B;
+    --sse: #1E3FD0;
+    --nll: #2E7D32;
+    --panel: #f6f6f6;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1320px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.05rem; margin: 0 0 6px; }
+  .m { font-family: var(--math); }
+  .m i { font-style: italic; }
+  .zc { color: var(--z); } .pc { color: var(--p); }
+  .male { color: var(--male); font-weight: 600; } .female { color: var(--female); font-weight: 600; }
+  .formula { font-size: 1.15rem; text-align: center; margin: 2px 0 14px; line-height: 1.6; }
+  .grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr); gap: 20px; align-items: start; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+  canvas { width: 100%; aspect-ratio: 1 / 0.85; display: block; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.88rem; color: var(--muted); margin-top: 4px; }
+  .swatch { display: inline-block; width: 22px; height: 10px; vertical-align: middle; margin-right: 4px; border-radius: 2px; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+  th { background: #555; color: #fff; font-weight: 600; padding: 6px 6px; text-align: center; }
+  th .m { font-size: 1.05rem; }
+  td { padding: 5px 6px; text-align: center; border-bottom: 1px solid #e3e3e3; }
+  tfoot td { border-top: 2px solid #555; font-weight: 600; background: #fafafa; }
+  .bar { position: relative; height: 18px; background: #eee; border-radius: 3px; min-width: 90px; }
+  .bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--nll); opacity: 0.75; }
+  .bar > b { position: relative; font-weight: 600; font-size: 0.85rem; line-height: 18px; }
+  .bar.sse > span { background: var(--sse); }
+  .totals { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+  .metric { background: var(--panel); border-radius: 10px; padding: 8px 12px; }
+  .metric .lbl { font-size: 0.82rem; color: var(--muted); }
+  .metric .val { font-size: 1.35rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .metric .def { font-family: var(--math); font-size: 0.95rem; }
+  .bottom { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr); gap: 20px; margin-top: 18px; }
+  @media (max-width: 980px) { .bottom { grid-template-columns: 1fr; } }
+  .controls {
+    display: grid; grid-template-columns: auto 1fr 4.5em; gap: 6px 10px; align-items: center;
+    background: var(--panel); border-radius: 10px; padding: 12px 14px;
+  }
+  .controls .name { font-family: var(--math); font-size: 1.2rem; font-style: italic; }
+  .controls output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type=range] { width: 100%; }
+  .buttons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer;
+  }
+  button:hover { background: #eee; }
+  button.sse { border-color: var(--sse); color: var(--sse); }
+  button.nll { border-color: var(--nll); color: var(--nll); }
+  .status { grid-column: 1 / -1; font-size: 0.92rem; color: var(--muted); min-height: 1.3em; }
+  .note { font-size: 0.85rem; color: var(--muted); margin: 8px 0 0; line-height: 1.45; }
+  .slicehead { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 4px; }
+  .slicehead label { font-size: 0.95rem; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Why not just squared error? Apply maximum likelihood!</h1>
+  <div class="formula m">
+    <i class="zc">z</i> = <i>w</i><sub>0</sub> + <i>w</i><sub>1</sub>·(stature − 174) + <i>w</i><sub>2</sub>·(interscye − 44.5),
+    &nbsp; <i class="pc">ŷ</i> = <i>σ</i>(<i class="zc">z</i>) = <i>P</i>(male | <b>x</b>)
+    <br>
+    likelihood of one point: &nbsp;<i>p</i>(<i>y</i> | <b>x</b>) = <i class="pc">ŷ</i><sup><i>y</i></sup> (1 − <i class="pc">ŷ</i>)<sup>1 − <i>y</i></sup>
+    &nbsp;=&nbsp; <i class="pc">ŷ</i> if male, &nbsp;1 − <i class="pc">ŷ</i> if female
+  </div>
+
+  <div class="grid">
+    <div>
+      <h2>Feature plane</h2>
+      <canvas id="plane" aria-label="Feature plane: stature vs interscye, shaded by predicted probability of male"></canvas>
+      <div class="legend">
+        <span><span class="swatch" style="background:linear-gradient(90deg, rgba(192,57,43,.45), #fff, rgba(42,147,194,.45))"></span>ŷ from 0 (female) to 1 (male)</span>
+        <span>thin lines: ŷ = 0.1, 0.25, 0.75, 0.9</span>
+        <span>dashed: decision boundary ŷ = 0.5 (z = 0)</span>
+      </div>
+    </div>
+
+    <div>
+      <h2>Per data point</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>stature</th><th>interscye</th><th class="m"><i>y</i></th>
+            <th class="m"><i>z</i></th><th class="m"><i>ŷ</i> = <i>σ</i>(<i>z</i>)</th>
+            <th class="m"><i>y</i> − <i>ŷ</i></th>
+            <th class="m">(<i>y</i> − <i>ŷ</i>)<sup>2</sup></th>
+            <th class="m"><i>p</i>(<i>y</i> | <b>x</b>)</th>
+            <th class="m">−log <i>p</i></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+        <tfoot id="foot"></tfoot>
+      </table>
+      <div class="totals">
+        <div class="metric">
+          <div class="lbl">Sum of squared errors</div>
+          <div class="val" id="vSSE" style="color:var(--sse)"></div>
+          <div class="def">∑ (<i>y</i> − <i>ŷ</i>)<sup>2</sup></div>
+        </div>
+        <div class="metric">
+          <div class="lbl">Likelihood of all data</div>
+          <div class="val" id="vL"></div>
+          <div class="def"><i>L</i>(<b>w</b>) = ∏ <i>p</i>(<i>y</i><sub><i>i</i></sub> | <b>x</b><sub><i>i</i></sub>)</div>
+        </div>
+        <div class="metric">
+          <div class="lbl">Negative log-likelihood</div>
+          <div class="val" id="vNLL" style="color:var(--nll)"></div>
+          <div class="def">−log <i>L</i> = −∑ log <i>p</i>(<i>y</i><sub><i>i</i></sub> | <b>x</b><sub><i>i</i></sub>)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <div class="controls">
+      <span class="name">w<sub>0</sub></span><input id="s0" type="range" min="-10" max="10" step="0.01"><output id="o0"></output>
+      <span class="name">w<sub>1</sub></span><input id="s1" type="range" min="-3" max="3" step="0.01"><output id="o1"></output>
+      <span class="name">w<sub>2</sub></span><input id="s2" type="range" min="-3" max="3" step="0.01"><output id="o2"></output>
+      <div class="buttons">
+        <button id="bSSE" class="sse">Gradient descent on squared error</button>
+        <button id="bNLL" class="nll">Gradient descent on −log likelihood</button>
+      </div>
+      <div class="buttons">
+        <button id="bReset">Reset weights</button>
+        <button id="bBad">Saturated start (wrong sign)</button>
+      </div>
+      <div class="status" id="status"></div>
+      <p class="note" style="grid-column:1/-1">The features are centred inside the model (174 cm and 44.5 are the averages of the four people),
+        which keeps the weights in a convenient range. These four points are perfectly separable, so the likelihood keeps
+        growing towards 1 as the weights grow: maximum likelihood has no finite optimum here, and gradient descent simply runs a fixed number of steps.</p>
+    </div>
+
+    <div>
+      <div class="slicehead">
+        <h2 style="margin:0">Loss along one weight (others fixed)</h2>
+        <label><input type="radio" name="slice" value="0"> <span class="m"><i>w</i><sub>0</sub></span></label>
+        <label><input type="radio" name="slice" value="1" checked> <span class="m"><i>w</i><sub>1</sub></span></label>
+        <label><input type="radio" name="slice" value="2"> <span class="m"><i>w</i><sub>2</sub></span></label>
+      </div>
+      <svg id="slice" viewBox="0 0 720 330" aria-label="Squared error and negative log-likelihood along one weight"></svg>
+      <p class="note">Squared error after a sigmoid has flat plateaus where the gradient almost vanishes (non-convex);
+        −log likelihood is convex and keeps a useful slope. Click in the plot to set the weight.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  // [stature, interscye, y (1 = male)]
+  const DATA = [[181, 46, 1], [166, 44, 0], [171, 38, 0], [178, 50, 1]];
+  const M1 = 174, M2 = 44.5;            // feature means used for centring
+  const W_START = [0, 0.2, 0.1];
+  const W_BAD = [0, -3, -1];
+  const RANGE = [[-10, 10], [-3, 3], [-3, 3]];
+  const state = { w: [...W_START], slice: 1 };
+
+  const css = getComputedStyle(document.documentElement);
+  const col = v => css.getPropertyValue(v).trim();
+  const C = { z: col("--z"), p: col("--p"), male: col("--male"), female: col("--female"),
+              sse: col("--sse"), nll: col("--nll"), ink: col("--ink"), muted: col("--muted") };
+
+  const sigmoid = z => 1 / (1 + Math.exp(-z));
+  const feats = ([s, i]) => [1, s - M1, i - M2];
+  const zOf = (w, d) => { const f = feats(d); return w[0] * f[0] + w[1] * f[1] + w[2] * f[2]; };
+  const lik = (y, p) => y ? p : 1 - p;
+  // -log p(y|x) without rounding p to 0 or 1: -log sigma(z) = softplus(-z), -log(1 - sigma(z)) = softplus(z)
+  const softplus = t => Math.max(t, 0) + Math.log1p(Math.exp(-Math.abs(t)));
+  const nllPoint = (y, z) => y ? softplus(-z) : softplus(z);
+
+  function losses(w) {
+    let sse = 0, nll = 0;
+    DATA.forEach(d => {
+      const z = zOf(w, d), p = sigmoid(z);
+      sse += (d[2] - p) ** 2; nll += nllPoint(d[2], z);
+    });
+    return { sse, nll, L: Math.exp(-nll) };
+  }
+  function grads(w) {
+    const gS = [0, 0, 0], gN = [0, 0, 0];
+    DATA.forEach(d => {
+      const f = feats(d), p = sigmoid(zOf(w, d)), y = d[2];
+      for (let k = 0; k < 3; k++) {
+        gS[k] += -2 * (y - p) * p * (1 - p) * f[k];
+        gN[k] += (p - y) * f[k];
+      }
+    });
+    return { gS, gN };
+  }
+
+  // ---------- Feature plane ----------
+  const cv = document.getElementById("plane"), ctx = cv.getContext("2d");
+  const XMIN = 160, XMAX = 186, YMIN = 34, YMAX = 54;
+  let W = 0, H = 0;
+  const PAD = { l: 52, r: 14, t: 12, b: 44 };
+  const sx = x => PAD.l + (x - XMIN) / (XMAX - XMIN) * (W - PAD.l - PAD.r);
+  const sy = y => H - PAD.b - (y - YMIN) / (YMAX - YMIN) * (H - PAD.t - PAD.b);
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1, r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = r.width; H = r.height;
+    render();
+  }
+
+  function mix(p) {
+    // 0 -> female red, 0.5 -> white, 1 -> male blue
+    const F = [192, 57, 43], Mc = [42, 147, 194];
+    const t = Math.abs(p - 0.5) * 2, c = p < 0.5 ? F : Mc;
+    const a = 0.5 * t;
+    return `rgb(${Math.round(255 + (c[0] - 255) * a)},${Math.round(255 + (c[1] - 255) * a)},${Math.round(255 + (c[2] - 255) * a)})`;
+  }
+
+  function contour(p, style) {
+    // line where z = logit(p): w0 + w1 (s - M1) + w2 (i - M2) = logit(p)
+    const [w0, w1, w2] = state.w, t = Math.log(p / (1 - p));
+    const pts = [];
+    if (Math.abs(w2) > 1e-9) {
+      for (const s of [XMIN, XMAX]) pts.push([s, M2 + (t - w0 - w1 * (s - M1)) / w2]);
+    }
+    if (Math.abs(w1) > 1e-9) {
+      for (const i of [YMIN, YMAX]) pts.push([M1 + (t - w0 - w2 * (i - M2)) / w1, i]);
+    }
+    const inside = pts.filter(([s, i]) => s >= XMIN - 1e-6 && s <= XMAX + 1e-6 && i >= YMIN - 1e-6 && i <= YMAX + 1e-6);
+    if (inside.length < 2) return;
+    inside.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+    const A = inside[0], B = inside[inside.length - 1];
+    ctx.beginPath(); ctx.moveTo(sx(A[0]), sy(A[1])); ctx.lineTo(sx(B[0]), sy(B[1]));
+    ctx.strokeStyle = style.c; ctx.lineWidth = style.w; ctx.setLineDash(style.dash || []);
+    ctx.stroke(); ctx.setLineDash([]);
+    if (style.label) {
+      const m = [(A[0] * 0.8 + B[0] * 0.2), (A[1] * 0.8 + B[1] * 0.2)];
+      ctx.font = "11px system-ui, sans-serif"; ctx.fillStyle = style.c; ctx.textAlign = "left";
+      ctx.fillText(style.label, sx(m[0]) + 4, sy(m[1]) - 4);
+    }
+  }
+
+  function renderPlane() {
+    if (!W) return;
+    ctx.clearRect(0, 0, W, H);
+    const step = 6;
+    for (let px = PAD.l; px < W - PAD.r; px += step) {
+      for (let py = PAD.t; py < H - PAD.b; py += step) {
+        const s = XMIN + (px + step / 2 - PAD.l) / (W - PAD.l - PAD.r) * (XMAX - XMIN);
+        const i = YMIN + (H - PAD.b - py - step / 2) / (H - PAD.t - PAD.b) * (YMAX - YMIN);
+        ctx.fillStyle = mix(sigmoid(zOf(state.w, [s, i])));
+        ctx.fillRect(px, py, step + 0.5, step + 0.5);
+      }
+    }
+    // grid and axes
+    ctx.strokeStyle = "rgba(0,0,0,0.08)"; ctx.lineWidth = 1;
+    ctx.font = "12px system-ui, sans-serif"; ctx.fillStyle = C.muted;
+    for (let s = XMIN; s <= XMAX; s += 2) {
+      ctx.beginPath(); ctx.moveTo(sx(s), PAD.t); ctx.lineTo(sx(s), H - PAD.b); ctx.stroke();
+      ctx.textAlign = "center"; ctx.fillText(String(s), sx(s), H - PAD.b + 16);
+    }
+    for (let i = YMIN; i <= YMAX; i += 2) {
+      ctx.beginPath(); ctx.moveTo(PAD.l, sy(i)); ctx.lineTo(W - PAD.r, sy(i)); ctx.stroke();
+      ctx.textAlign = "right"; ctx.fillText(String(i), PAD.l - 6, sy(i) + 4);
+    }
+    ctx.strokeStyle = "#555"; ctx.strokeRect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b);
+    ctx.fillStyle = C.ink; ctx.font = "14px system-ui, sans-serif"; ctx.textAlign = "center";
+    ctx.fillText("stature", (PAD.l + W - PAD.r) / 2, H - 8);
+    ctx.save(); ctx.translate(14, (PAD.t + H - PAD.b) / 2); ctx.rotate(-Math.PI / 2);
+    ctx.fillText("interscye", 0, 0); ctx.restore();
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(PAD.l, PAD.t, W - PAD.l - PAD.r, H - PAD.t - PAD.b); ctx.clip();
+    // label the contours only when they are far enough apart to read
+    const pxS = (W - PAD.l - PAD.r) / (XMAX - XMIN), pxI = (H - PAD.t - PAD.b) / (YMAX - YMIN);
+    const gradPx = Math.hypot(state.w[1] / pxS, state.w[2] / pxI);
+    const spacing = gradPx > 0 ? Math.log(3) / gradPx : Infinity;  // distance between the 0.5 and 0.75 lines
+    for (const p of [0.1, 0.25, 0.75, 0.9]) contour(p, { c: "rgba(0,0,0,0.35)", w: 1, label: spacing > 28 ? String(p) : null });
+    contour(0.5, { c: C.ink, w: 2.5, dash: [8, 6] });
+    ctx.restore();
+
+    // data points with their prediction
+    DATA.forEach((d, k) => {
+      const p = sigmoid(zOf(state.w, d)), x = sx(d[0]), y = sy(d[1]);
+      ctx.beginPath(); ctx.arc(x, y, 9, 0, 2 * Math.PI);
+      ctx.fillStyle = d[2] ? C.male : C.female; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = "#fff"; ctx.stroke();
+      ctx.fillStyle = "#fff"; ctx.font = "bold 11px system-ui, sans-serif"; ctx.textAlign = "center";
+      ctx.fillText(String(k + 1), x, y + 4);
+      ctx.font = "13px system-ui, sans-serif"; ctx.textAlign = "left"; ctx.fillStyle = C.ink;
+      ctx.fillText(`ŷ = ${p.toFixed(2)}`, x + 13, y - 6);
+      ctx.fillStyle = C.muted;
+      ctx.fillText(`p(y|x) = ${lik(d[2], p).toFixed(2)}`, x + 13, y + 10);
+    });
+  }
+
+  // ---------- Table ----------
+  function sgn(v) { return (v < 0 ? "−" : "") + Math.abs(v).toFixed(2); }
+  function renderTable() {
+    let html = "";
+    DATA.forEach((d, k) => {
+      const z = zOf(state.w, d), p = sigmoid(z), y = d[2], e = y - p, l = lik(y, p);
+      const cls = y ? "male" : "female";
+      html += `<tr><td>${k + 1}</td><td>${d[0]}</td><td>${d[1]}</td>` +
+        `<td class="${cls}">${y} (${y ? "Male" : "Female"})</td>` +
+        `<td class="zc">${sgn(z)}</td><td class="pc"><b>${p.toFixed(3)}</b></td>` +
+        `<td>${sgn(e)}</td>` +
+        `<td><div class="bar sse"><span style="width:${(e * e * 100).toFixed(1)}%"></span><b>${(e * e).toFixed(3)}</b></div></td>` +
+        `<td><div class="bar"><span style="width:${(l * 100).toFixed(1)}%"></span><b>${l.toFixed(3)}</b></div></td>` +
+        `<td>${nllPoint(y, z).toFixed(3)}</td></tr>`;
+    });
+    document.getElementById("rows").innerHTML = html;
+    const { sse, nll, L } = losses(state.w);
+    document.getElementById("foot").innerHTML =
+      `<tr><td colspan="7" style="text-align:right">total</td><td style="color:var(--sse)">∑ = ${sse.toFixed(3)}</td>` +
+      `<td>∏ = ${L.toFixed(4)}</td><td style="color:var(--nll)">∑ = ${nll.toFixed(3)}</td></tr>`;
+    document.getElementById("vSSE").textContent = sse.toFixed(4);
+    document.getElementById("vL").textContent = L.toFixed(4);
+    document.getElementById("vNLL").textContent = nll.toFixed(4);
+  }
+
+  // ---------- Loss along one weight ----------
+  const svg = document.getElementById("slice");
+  const SP = { l: 58, r: 20, gap: 30, t: 14, h: 120 };
+  function niceMax(v) {
+    const step = v <= 4 ? 1 : v <= 20 ? 5 : v <= 100 ? 10 : 50;
+    return Math.max(step, Math.ceil(v / step) * step);
+  }
+  function renderSlice() {
+    const k = state.slice, [lo, hi] = RANGE[k], Wd = 720;
+    const sxw = v => SP.l + (v - lo) / (hi - lo) * (Wd - SP.l - SP.r);
+    const N = 240, vs = [], sseV = [], nllV = [];
+    for (let i = 0; i <= N; i++) {
+      const v = lo + (hi - lo) * i / N, w = [...state.w]; w[k] = v;
+      const r = losses(w); vs.push(v); sseV.push(r.sse); nllV.push(r.nll);
+    }
+    const panels = [
+      { name: "squared error ∑(y − ŷ)²", vals: sseV, c: C.sse, top: SP.t, max: 4 },
+      // full range, no clipping: NLL grows linearly where squared error is flat
+      { name: "−log likelihood", vals: nllV, c: C.nll, top: SP.t + SP.h + SP.gap, max: niceMax(Math.max(...nllV)) },
+    ];
+    const cur = losses(state.w);
+    let s = "";
+    panels.forEach((pn, j) => {
+      const syv = v => pn.top + SP.h - Math.min(v, pn.max) / pn.max * SP.h;
+      s += `<rect x="${SP.l}" y="${pn.top}" width="${Wd - SP.l - SP.r}" height="${SP.h}" fill="none" stroke="#ccc"/>`;
+      for (const t of [0, pn.max / 2, pn.max]) {
+        s += `<text x="${SP.l - 6}" y="${syv(t) + 4}" font-size="12" text-anchor="end" fill="${C.muted}">${t}</text>`;
+        s += `<line x1="${SP.l}" y1="${syv(t)}" x2="${Wd - SP.r}" y2="${syv(t)}" stroke="#f0f0f0"/>`;
+      }
+      let d = "";
+      pn.vals.forEach((v, i) => { d += (i ? "L" : "M") + sxw(vs[i]).toFixed(1) + "," + syv(v).toFixed(1); });
+      s += `<path d="${d}" fill="none" stroke="${pn.c}" stroke-width="2.5"/>`;
+      s += `<text x="${SP.l + 8}" y="${pn.top + 16}" font-size="13" fill="${pn.c}" font-weight="600">${pn.name}</text>`;
+      const cv = j === 0 ? cur.sse : cur.nll;
+      s += `<circle cx="${sxw(state.w[k])}" cy="${syv(cv)}" r="6" fill="${pn.c}" stroke="#fff" stroke-width="1.5"/>`;
+    });
+    const xc = sxw(state.w[k]);
+    s += `<line x1="${xc}" y1="${SP.t}" x2="${xc}" y2="${SP.t + 2 * SP.h + SP.gap}" stroke="${C.ink}" stroke-dasharray="4 4"/>`;
+    const yb = SP.t + 2 * SP.h + SP.gap;
+    const stepT = k === 0 ? 2 : 1;
+    for (let v = lo; v <= hi + 1e-9; v += stepT) {
+      s += `<text x="${sxw(v)}" y="${yb + 18}" font-size="12" text-anchor="middle" fill="${C.muted}">${v}</text>`;
+    }
+    s += `<text x="${(SP.l + Wd - SP.r) / 2}" y="${yb + 38}" font-size="14" text-anchor="middle" font-style="italic" font-family="serif">w${"₀₁₂"[k]}</text>`;
+    svg.innerHTML = s;
+  }
+  svg.addEventListener("click", e => {
+    const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
+    const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    const k = state.slice, [lo, hi] = RANGE[k];
+    const v = lo + (q.x - SP.l) / (720 - SP.l - SP.r) * (hi - lo);
+    if (v >= lo && v <= hi) { stopGD(); state.w[k] = Math.round(v * 100) / 100; render(); }
+  });
+
+  // ---------- Controls ----------
+  function sync() {
+    for (let k = 0; k < 3; k++) {
+      document.getElementById("s" + k).value = state.w[k];
+      document.getElementById("o" + k).textContent = state.w[k].toFixed(2);
+    }
+    document.querySelectorAll('input[name="slice"]').forEach(r => { r.checked = +r.value === state.slice; });
+  }
+  function render() { renderPlane(); renderTable(); renderSlice(); sync(); }
+
+  for (let k = 0; k < 3; k++) {
+    document.getElementById("s" + k).addEventListener("input", e => { stopGD(); state.w[k] = parseFloat(e.target.value); render(); });
+  }
+  document.querySelectorAll('input[name="slice"]').forEach(r =>
+    r.addEventListener("change", () => { state.slice = +r.value; render(); }));
+  const status = document.getElementById("status");
+  document.getElementById("bReset").addEventListener("click", () => { stopGD(); state.w = [...W_START]; status.textContent = ""; render(); });
+  document.getElementById("bBad").addEventListener("click", () => {
+    stopGD(); state.w = [...W_BAD];
+    status.textContent = "Every point is confidently wrong. Now compare the two gradient descent buttons.";
+    render();
+  });
+
+  let anim = null;
+  function stopGD() { cancelAnimationFrame(anim); anim = null; }
+  function runGD(kind) {
+    stopGD();
+    const lr = kind === "sse" ? 0.03 : 0.03, total = 300, perFrame = 2;
+    let done = 0;
+    const start = losses(state.w)[kind];
+    const frame = () => {
+      for (let j = 0; j < perFrame; j++) {
+        const g = grads(state.w)[kind === "sse" ? "gS" : "gN"];
+        for (let k = 0; k < 3; k++) {
+          state.w[k] = Math.max(RANGE[k][0], Math.min(RANGE[k][1], state.w[k] - lr * g[k]));
+        }
+        done++;
+      }
+      const now = losses(state.w)[kind];
+      status.textContent = `${kind === "sse" ? "Squared error" : "−log likelihood"}: step ${done}/${total}, ` +
+        `loss ${start.toFixed(3)} → ${now.toFixed(3)}`;
+      render();
+      if (done < total) anim = requestAnimationFrame(frame);
+    };
+    anim = requestAnimationFrame(frame);
+  }
+  document.getElementById("bSSE").addEventListener("click", () => runGD("sse"));
+  document.getElementById("bNLL").addEventListener("click", () => runGD("nll"));
+
+  new ResizeObserver(resize).observe(cv);
+  render();
+})();
+</script>
+</body>
+</html>

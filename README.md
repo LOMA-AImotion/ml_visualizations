@@ -37,6 +37,7 @@ Linear and logistic regression, their loss functions and training:
 
 - [Squared Error Explorer](https://loma-aimotion.github.io/ml_visualizations/linreg_loss_interactive.html) - Drag a regression line and see the squared errors, SSE, MSE and RMSE of linear regression
 - [Logistic Regression 2D Explorer](https://loma-aimotion.github.io/ml_visualizations/logreg_2d_interactive.html) - Rotatable 3D view of the plane w⊤x, its sigmoid surface and class regions; adjust weights or train with gradient descent and watch cross-entropy loss and accuracy
+- [Squared Error vs Likelihood](https://loma-aimotion.github.io/ml_visualizations/logreg_likelihood_interactive.html) - Why logistic regression uses maximum likelihood instead of squared error: compare both losses per data point, along one weight, and under gradient descent
 - [Logistic Regression 2D](https://loma-aimotion.github.io/ml_visualizations/log_reg2d.html) - Two-dimensional logistic regression
 - [Logistic Regression (Bokeh)](https://loma-aimotion.github.io/ml_visualizations/log_reg_bokeh.html) - Interactive logistic regression with Bokeh
 - [Logistic Regression with Gradient](https://loma-aimotion.github.io/ml_visualizations/log_reg_bokeh_gradient.html) - Gradient descent for logistic regression
