@@ -1,0 +1,542 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Logistic Regression 2D</title>
+<style>
+  :root {
+    --ink: #111;
+    --muted: #777;
+    --z: #8E24AA;
+    --p: #F57C00;
+    --c0: #1E88E5;
+    --c1: #E53935;
+    --panel: #f6f6f6;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1300px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .m { font-family: var(--math); }
+  .m i { font-style: italic; }
+  .zc { color: var(--z); }
+  .pc { color: var(--p); }
+  .formula { font-size: 1.25rem; text-align: center; margin: 4px 0 12px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  .view3d { position: relative; }
+  canvas { width: 100%; aspect-ratio: 1 / 0.9; display: block; cursor: grab; touch-action: none; }
+  canvas.dragging { cursor: grabbing; }
+  .hint { color: var(--muted); font-size: 0.88rem; margin: 4px 0 0; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 0.95rem; }
+  .toggles label { display: inline-flex; gap: 6px; align-items: center; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, sans-serif; }
+  .calc {
+    background: var(--panel); border-radius: 10px; padding: 10px 14px; margin: 8px 0 12px;
+    font-family: var(--math); font-size: 1.12rem; line-height: 1.75; font-variant-numeric: tabular-nums;
+  }
+  .verdict { font-family: system-ui, sans-serif; font-size: 0.98rem; font-weight: 600; }
+  .controls {
+    display: grid; grid-template-columns: auto 1fr 4.2em; gap: 6px 10px; align-items: center;
+    background: var(--panel); border-radius: 10px; padding: 12px 14px;
+  }
+  .controls .name { font-family: var(--math); font-size: 1.2rem; font-style: italic; }
+  .controls output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .controls .sep { grid-column: 1 / -1; border-top: 1px solid #ddd; margin: 4px 0; }
+  input[type=range] { width: 100%; }
+  .buttons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer;
+  }
+  button:hover { background: #eee; }
+  .stats { grid-column: 1 / -1; display: flex; gap: 18px; font-size: 0.95rem; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Logistic regression in 2D</h1>
+  <div class="formula m">
+    <i class="pc">ŷ</i> = <i>σ</i>(<i class="zc">z</i>), &nbsp;
+    <i class="zc">z</i> = <b>w</b><sup>⊤</sup><b>x</b> = <i>w</i><sub>0</sub>·1 + <i>w</i><sub>1</sub><i>x</i><sub>1</sub> + <i>w</i><sub>2</sub><i>x</i><sub>2</sub>,
+    &nbsp; <i>σ</i>(<i>z</i>) = 1 / (1 + <i>e</i><sup>−<i>z</i></sup>)
+  </div>
+
+  <div class="layout">
+    <div class="view3d">
+      <canvas id="c3d" aria-label="3D view of the plane z = w^T x and the sigmoid surface over the input plane"></canvas>
+      <div class="toggles">
+        <label><input type="checkbox" id="tPlane" checked> <span class="zc">plane <i class="m">z</i> = <b class="m">w</b><sup>⊤</sup><b class="m">x</b></span></label>
+        <label><input type="checkbox" id="tSig"> <span class="pc">surface <i class="m">σ</i>(<b class="m">w</b><sup>⊤</sup><b class="m">x</b>)</span></label>
+        <label><input type="checkbox" id="tRegions" checked> class regions</label>
+        <button id="bView">Reset view</button>
+      </div>
+      <p class="hint">Drag to rotate. Click on the input plane to move the query point <b class="m">x</b>.
+        The purple axis shows <i class="m">z</i>, the orange axis <i class="m">σ</i>(<i class="m">z</i>); <i class="m">σ</i> = 0.5 sits level with <i class="m">z</i> = 0.</p>
+    </div>
+
+    <div>
+      <svg id="sig" viewBox="0 0 520 300" aria-label="Sigmoid function with the query point and all data points"></svg>
+      <div class="calc" id="calc"></div>
+      <div class="controls">
+        <span class="name">w<sub>0</sub></span><input id="s_w0" type="range" min="-5" max="5" step="0.01"><output id="o_w0"></output>
+        <span class="name">w<sub>1</sub></span><input id="s_w1" type="range" min="-4" max="4" step="0.01"><output id="o_w1"></output>
+        <span class="name">w<sub>2</sub></span><input id="s_w2" type="range" min="-4" max="4" step="0.01"><output id="o_w2"></output>
+        <div class="sep"></div>
+        <span class="name">x<sub>1</sub></span><input id="s_x1" type="range" min="-3" max="3" step="0.01"><output id="o_x1"></output>
+        <span class="name">x<sub>2</sub></span><input id="s_x2" type="range" min="-3" max="3" step="0.01"><output id="o_x2"></output>
+        <div class="buttons">
+          <button id="bTrain">Train (gradient descent)</button>
+          <button id="bReset">Reset weights</button>
+        </div>
+        <div class="stats">
+          <span>cross-entropy loss: <b id="loss"></b></span>
+          <span>accuracy: <b id="acc"></b></span>
+          <span id="step"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  // Two overlapping classes in the input plane: [x1, x2, label]
+  const DATA = [[-0.71, -1.22, 0], [-1.31, -2.8, 0], [0.9, 0.44, 0], [-1.23, 0.07, 0], [-0.62, -1.25, 0],
+    [0.08, -1.01, 0], [-1.23, -1.49, 0], [-0.45, -0.8, 0], [-0.35, -1.31, 0], [-0.77, -1.59, 0],
+    [-0.06, -0.51, 0], [-0.57, -0.29, 0], [-0.11, 1.58, 1], [2.8, -0.84, 1], [-0.83, -0.7, 1],
+    [1.74, 0.93, 1], [1.98, 1.52, 1], [1.11, 1.08, 1], [0.73, 1.67, 1], [-0.23, 0.38, 1],
+    [1.14, 2.6, 1], [0.14, -0.28, 1], [0.34, 1.77, 1], [0.66, 2.12, 1]];
+  const W_START = [0, 1, 0];
+
+  const state = {
+    w: [...W_START], q: [1.2, -0.6],
+    plane: true, sig: false, regions: true,
+    view: { a: 0.55, e: 0.38 }, steps: 0,
+  };
+
+  const XR = 3;          // input plane is [-XR, XR]^2
+  const ZMAX = 6;        // z-axis spans [-ZMAX, ZMAX]
+  const HS = XR / ZMAX;  // world height per unit of z, so the box is a cube
+
+  const css = getComputedStyle(document.documentElement);
+  const col = v => css.getPropertyValue(v).trim();
+  const C = { z: col("--z"), p: col("--p"), c0: col("--c0"), c1: col("--c1"), ink: col("--ink"), muted: col("--muted") };
+
+  const sigmoid = z => 1 / (1 + Math.exp(-z));
+  const zOf = (x1, x2) => state.w[0] + state.w[1] * x1 + state.w[2] * x2;
+  const hZ = z => z * HS;                         // height of z on the purple scale
+  const hP = p => (2 * p - 1) * XR;               // height of a probability on the orange scale
+
+  // ---------- 3D projection (orthographic, azimuth a, elevation e) ----------
+  const cv = document.getElementById("c3d");
+  const ctx = cv.getContext("2d");
+  let W = 0, H = 0, S = 1, CX = 0, CY = 0;
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr);
+    cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = r.width; H = r.height;
+    S = Math.min(W, H) / 10.2;
+    CX = W / 2; CY = H / 2 + 0.02 * H;
+    render();
+  }
+
+  function proj(x, y, h) {
+    const { a, e } = state.view;
+    const ca = Math.cos(a), sa = Math.sin(a), ce = Math.cos(e), se = Math.sin(e);
+    const X = x * ca - y * sa, Y = x * sa + y * ca;
+    return { sx: CX + S * X, sy: CY - S * (Y * se + h * ce), d: Y * ce - h * se };
+  }
+
+  function unprojectFloor(sx, sy) {
+    // screen point -> point on the input plane (h = 0)
+    const { a, e } = state.view;
+    const u = (sx - CX) / S, v = (CY - sy) / S;
+    const X = u, Y = v / Math.sin(e);
+    return [X * Math.cos(a) + Y * Math.sin(a), -X * Math.sin(a) + Y * Math.cos(a)];
+  }
+
+  // Clip a polygon of [x1, x2] vertices to f(x1, x2) >= 0 for linear f
+  function clipPoly(poly, f) {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const A = poly[i], B = poly[(i + 1) % poly.length];
+      const fa = f(A[0], A[1]), fb = f(B[0], B[1]);
+      if (fa >= 0) out.push(A);
+      if ((fa >= 0) !== (fb >= 0)) {
+        const t = fa / (fa - fb);
+        out.push([A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])]);
+      }
+    }
+    return out;
+  }
+  function clipSeg(A, B, fs) {
+    let t0 = 0, t1 = 1;
+    for (const f of fs) {
+      const fa = f(A[0], A[1]), fb = f(B[0], B[1]);
+      if (fa < 0 && fb < 0) return null;
+      if (fa < 0) t0 = Math.max(t0, fa / (fa - fb));
+      else if (fb < 0) t1 = Math.min(t1, fa / (fa - fb));
+    }
+    if (t0 >= t1) return null;
+    const P = t => [A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])];
+    return [P(t0), P(t1)];
+  }
+
+  function render3d() {
+    ctx.clearRect(0, 0, W, H);
+    const prims = [];
+    const N = 12, cell = 2 * XR / N;
+    const slab = [(x, y) => ZMAX - zOf(x, y), (x, y) => zOf(x, y) + ZMAX];
+    const addPoly = (pts2, hf, fill, stroke) => {
+      if (pts2.length < 3) return;
+      const pts = pts2.map(([x, y]) => proj(x, y, hf(x, y)));
+      prims.push({ t: "poly", pts, fill, stroke, d: pts.reduce((s, p) => s + p.d, 0) / pts.length });
+    };
+    const addLine = (A, B, ha, hb, stroke, width, dash, bias = 0) => {
+      const pa = proj(A[0], A[1], ha), pb = proj(B[0], B[1], hb);
+      prims.push({ t: "line", pa, pb, stroke, width, dash, d: (pa.d + pb.d) / 2 - bias });
+    };
+
+    // Box: back edges first so they sit behind everything
+    const corners = [[-XR, -XR], [XR, -XR], [XR, XR], [-XR, XR]];
+    for (let i = 0; i < 4; i++) {
+      const A = corners[i], B = corners[(i + 1) % 4];
+      for (const h of [-XR, XR]) addLine(A, B, h, h, "#d0d0d0", 1, null, -100);
+      addLine(A, A, -XR, XR, "#d0d0d0", 1, null, -100);
+    }
+
+    // Input plane (h = 0): grid cells, tinted by predicted class
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const x = -XR + i * cell, y = -XR + j * cell;
+      const sq = [[x, y], [x + cell, y], [x + cell, y + cell], [x, y + cell]];
+      if (state.regions) {
+        addPoly(clipPoly(sq, (a, b) => zOf(a, b)), () => 0, "rgba(229,57,53,0.10)");
+        addPoly(clipPoly(sq, (a, b) => -zOf(a, b)), () => 0, "rgba(30,136,229,0.10)");
+      } else {
+        addPoly(sq, () => 0, "rgba(0,0,0,0.03)");
+      }
+    }
+    for (let k = -XR; k <= XR; k++) {
+      for (let i = 0; i < N; i++) {
+        const t = -XR + i * cell;
+        addLine([k, t], [k, t + cell], 0, 0, "#cfcfcf", 1, null, -0.01);
+        addLine([t, k], [t + cell, k], 0, 0, "#cfcfcf", 1, null, -0.01);
+      }
+    }
+
+    // Decision boundary on the input plane: z = 0
+    const [w0, w1, w2] = state.w, nn = w1 * w1 + w2 * w2;
+    if (nn > 1e-9) {
+      const p0 = [-w0 * w1 / nn, -w0 * w2 / nn], dir = [-w2 / Math.sqrt(nn), w1 / Math.sqrt(nn)];
+      const box = [(x) => x + XR, (x) => XR - x, (x, y) => y + XR, (x, y) => XR - y];
+      const seg = clipSeg([p0[0] - 20 * dir[0], p0[1] - 20 * dir[1]], [p0[0] + 20 * dir[0], p0[1] + 20 * dir[1]], box);
+      if (seg) {
+        const K = 10;
+        for (let i = 0; i < K; i++) {
+          const a = i / K, b = (i + 1) / K;
+          const A = [seg[0][0] + a * (seg[1][0] - seg[0][0]), seg[0][1] + a * (seg[1][1] - seg[0][1])];
+          const B = [seg[0][0] + b * (seg[1][0] - seg[0][0]), seg[0][1] + b * (seg[1][1] - seg[0][1])];
+          addLine(A, B, 0, 0, C.ink, 2.5, [7, 5], -0.02);
+        }
+      }
+    }
+
+    // Plane z = w^T x, clipped to the box
+    if (state.plane) {
+      for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+        const x = -XR + i * cell, y = -XR + j * cell;
+        let poly = [[x, y], [x + cell, y], [x + cell, y + cell], [x, y + cell]];
+        for (const f of slab) poly = clipPoly(poly, f);
+        addPoly(poly, (a, b) => hZ(zOf(a, b)), "rgba(142,36,170,0.28)");
+      }
+      for (let k = -XR; k <= XR; k++) {
+        for (let i = 0; i < N; i++) {
+          const t = -XR + i * cell;
+          for (const [A, B] of [[[k, t], [k, t + cell]], [[t, k], [t + cell, k]]]) {
+            const s = clipSeg(A, B, slab);
+            if (s) addLine(s[0], s[1], hZ(zOf(...s[0])), hZ(zOf(...s[1])), "rgba(142,36,170,0.55)", 1, null, -0.01);
+          }
+        }
+      }
+    }
+
+    // Sigmoid surface sigma(w^T x) on the orange scale
+    if (state.sig) {
+      const M = 24, c2 = 2 * XR / M;
+      for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) {
+        const x = -XR + i * c2, y = -XR + j * c2;
+        addPoly([[x, y], [x + c2, y], [x + c2, y + c2], [x, y + c2]], (a, b) => hP(sigmoid(zOf(a, b))),
+                "rgba(245,124,0,0.30)");
+      }
+      for (let k = -XR; k <= XR; k += 1) {
+        for (let i = 0; i < M; i++) {
+          const t = -XR + i * c2;
+          for (const [A, B] of [[[k, t], [k, t + c2]], [[t, k], [t + c2, k]]]) {
+            addLine(A, B, hP(sigmoid(zOf(...A))), hP(sigmoid(zOf(...B))), "rgba(200,95,0,0.55)", 1, null, -0.01);
+          }
+        }
+      }
+    }
+
+    // Data points on the input plane
+    DATA.forEach(([x, y, c]) => {
+      const p = proj(x, y, 0);
+      prims.push({ t: "dot", p, r: 5.5, fill: c ? C.c1 : C.c0, stroke: "#fff", d: p.d - 0.05 });
+    });
+
+    // Query point: stem from the input plane to its z and sigma(z)
+    const [qx, qy] = state.q, zq = zOf(qx, qy), pq = sigmoid(zq);
+    const hz = hZ(Math.max(-ZMAX, Math.min(ZMAX, zq)));
+    const K = 8;
+    for (let i = 0; i < K; i++) {
+      const a = hz * i / K, b = hz * (i + 1) / K;
+      addLine([qx, qy], [qx, qy], a, b, C.z, 2.5, [5, 4], 0.05);
+    }
+    if (state.sig) {
+      const hp = hP(pq);
+      for (let i = 0; i < K; i++) {
+        const a = hp * i / K, b = hp * (i + 1) / K;
+        addLine([qx, qy], [qx, qy], a, b, C.p, 2, [2, 4], 0.04);
+      }
+      const pp = proj(qx, qy, hp);
+      prims.push({ t: "dot", p: pp, r: 6.5, fill: C.p, stroke: "#fff", d: pp.d - 0.1 });
+    }
+    const pf = proj(qx, qy, 0);
+    prims.push({ t: "ring", p: pf, r: 8, stroke: C.ink, d: pf.d - 0.1 });
+    if (Math.abs(zq) <= ZMAX) {
+      const pz = proj(qx, qy, hz);
+      prims.push({ t: "dot", p: pz, r: 6.5, fill: C.z, stroke: "#fff", d: pz.d - 0.1 });
+    }
+
+    // Painter's algorithm: far to near
+    prims.sort((A, B) => B.d - A.d);
+    for (const pr of prims) {
+      if (pr.t === "poly") {
+        ctx.beginPath();
+        pr.pts.forEach((p, i) => i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy));
+        ctx.closePath();
+        ctx.fillStyle = pr.fill;
+        ctx.fill();
+      } else if (pr.t === "line") {
+        ctx.beginPath();
+        ctx.moveTo(pr.pa.sx, pr.pa.sy); ctx.lineTo(pr.pb.sx, pr.pb.sy);
+        ctx.strokeStyle = pr.stroke; ctx.lineWidth = pr.width;
+        ctx.setLineDash(pr.dash || []);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (pr.t === "dot") {
+        ctx.beginPath(); ctx.arc(pr.p.sx, pr.p.sy, pr.r, 0, 2 * Math.PI);
+        ctx.fillStyle = pr.fill; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = pr.stroke; ctx.stroke();
+      } else if (pr.t === "ring") {
+        ctx.beginPath(); ctx.arc(pr.p.sx, pr.p.sy, pr.r, 0, 2 * Math.PI);
+        ctx.lineWidth = 2; ctx.strokeStyle = pr.stroke; ctx.stroke();
+      }
+    }
+
+    drawAxes();
+  }
+
+  function label(text, x, y, color, align = "center", size = 13, italic = false) {
+    ctx.font = `${italic ? "italic " : ""}${size}px ${italic ? "Cambria Math, Times New Roman, serif" : "system-ui, sans-serif"}`;
+    ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle";
+    ctx.fillText(text, x, y);
+  }
+
+  function drawAxes() {
+    // vertical scales on the left- and right-most corners of the box
+    const corners = [[-XR, -XR], [XR, -XR], [XR, XR], [-XR, XR]].map(c => ({ c, p: proj(c[0], c[1], 0) }));
+    corners.sort((A, B) => A.p.sx - B.p.sx);
+    const left = corners[0].c, right = corners[3].c;
+    for (const z of [-6, -3, 0, 3, 6]) {
+      const p = proj(left[0], left[1], hZ(z));
+      ctx.beginPath(); ctx.moveTo(p.sx - 4, p.sy); ctx.lineTo(p.sx + 4, p.sy);
+      ctx.strokeStyle = C.z; ctx.lineWidth = 1.5; ctx.stroke();
+      label(String(z), p.sx - 8, p.sy, C.z, "right", 12);
+    }
+    const lt = proj(left[0], left[1], XR);
+    label("z", lt.sx - 4, lt.sy - 16, C.z, "center", 17, true);
+    if (state.sig) {
+      for (const pv of [0, 0.5, 1]) {
+        const p = proj(right[0], right[1], hP(pv));
+        ctx.beginPath(); ctx.moveTo(p.sx - 4, p.sy); ctx.lineTo(p.sx + 4, p.sy);
+        ctx.strokeStyle = C.p; ctx.lineWidth = 1.5; ctx.stroke();
+        label(String(pv), p.sx + 8, p.sy, C.p, "left", 12);
+      }
+      const rt = proj(right[0], right[1], XR);
+      label("σ(z)", rt.sx + 4, rt.sy - 16, C.p, "center", 17, true);
+    }
+    // input axes: label the two edges of the front corner (highest screen y)
+    const front = corners.slice().sort((A, B) => B.p.sy - A.p.sy)[0].c;
+    const mx = proj(0, front[1], 0), my = proj(front[0], 0, 0);
+    const off = (p, cx, cy) => [p.sx + (p.sx - cx) * 0.12, p.sy + (p.sy - cy) * 0.12 + 10];
+    const o = proj(0, 0, 0);
+    const [ax, ay] = off(mx, o.sx, o.sy), [bx, by] = off(my, o.sx, o.sy);
+    label("x₁", ax, ay, C.ink, "center", 17, true);
+    label("x₂", bx, by, C.ink, "center", 17, true);
+  }
+
+  // ---------- Sigmoid panel ----------
+  const svg = document.getElementById("sig");
+  const ZR = 8, PL = 50, PR = 500, PT = 20, PB = 250;
+  const sxz = z => PL + (z + ZR) / (2 * ZR) * (PR - PL);
+  const syp = p => PB - p * (PB - PT);
+
+  function renderSig() {
+    const [qx, qy] = state.q, zq = zOf(qx, qy), pq = sigmoid(zq);
+    let s = "";
+    for (const p of [0, 0.5, 1]) {
+      s += `<line x1="${PL}" y1="${syp(p)}" x2="${PR}" y2="${syp(p)}" stroke="${p === 0.5 ? "#ccc" : "#eee"}" ${p === 0.5 ? 'stroke-dasharray="5 4"' : ""}/>`;
+      s += `<text x="${PL - 8}" y="${syp(p) + 4}" font-size="13" text-anchor="end" fill="${C.p}">${p}</text>`;
+    }
+    for (let z = -ZR; z <= ZR; z += 2) {
+      s += `<text x="${sxz(z)}" y="${PB + 20}" font-size="13" text-anchor="middle" fill="${C.z}">${z}</text>`;
+    }
+    s += `<line x1="${PL}" y1="${PB}" x2="${PR}" y2="${PB}" stroke="#555"/>`;
+    s += `<line x1="${sxz(0)}" y1="${PT}" x2="${sxz(0)}" y2="${PB}" stroke="#555"/>`;
+    s += `<text x="${PR}" y="${PB + 42}" font-size="16" text-anchor="end" font-style="italic" font-family="serif" fill="${C.z}">z = wᵀx</text>`;
+    s += `<text x="${PL - 8}" y="${PT - 6}" font-size="16" text-anchor="start" font-style="italic" font-family="serif" fill="${C.p}">σ(z)</text>`;
+    let d = "";
+    for (let i = 0; i <= 200; i++) {
+      const z = -ZR + 2 * ZR * i / 200;
+      d += (i ? "L" : "M") + sxz(z).toFixed(1) + "," + syp(sigmoid(z)).toFixed(1);
+    }
+    s += `<path d="${d}" fill="none" stroke="${C.p}" stroke-width="3"/>`;
+
+    // every data point's z, placed on the curve
+    DATA.forEach(([x, y, c]) => {
+      const z = Math.max(-ZR, Math.min(ZR, zOf(x, y)));
+      s += `<circle cx="${sxz(z)}" cy="${syp(sigmoid(z))}" r="5" fill="${c ? C.c1 : C.c0}" stroke="#fff" stroke-width="1.2" opacity="0.85"/>`;
+    });
+
+    // the query point fed into sigma
+    const zc = Math.max(-ZR, Math.min(ZR, zq));
+    s += `<line x1="${sxz(zc)}" y1="${PB}" x2="${sxz(zc)}" y2="${syp(pq)}" stroke="${C.z}" stroke-width="2" stroke-dasharray="5 4"/>`;
+    s += `<line x1="${PL}" y1="${syp(pq)}" x2="${sxz(zc)}" y2="${syp(pq)}" stroke="${C.p}" stroke-width="2" stroke-dasharray="5 4"/>`;
+    s += `<circle cx="${sxz(zc)}" cy="${PB}" r="6" fill="${C.z}"/>`;
+    s += `<circle cx="${sxz(zc)}" cy="${syp(pq)}" r="7" fill="${C.p}" stroke="#fff" stroke-width="1.5"/>`;
+    s += `<text x="${sxz(zc)}" y="${PB - 10}" font-size="13" text-anchor="${zq > 0 ? "start" : "end"}" dx="${zq > 0 ? 8 : -8}" fill="${C.z}">z = ${zq.toFixed(2)}${Math.abs(zq) > ZR ? " (off scale)" : ""}</text>`;
+    s += `<text x="${PL + 6}" y="${syp(pq) - 7}" font-size="13" fill="${C.p}">${pq.toFixed(3)}</text>`;
+    svg.innerHTML = s;
+  }
+
+  function f2(v) { return (v < 0 ? "−" : "") + Math.abs(v).toFixed(2); }
+  function par(v) { return v < 0 ? `(${f2(v)})` : f2(v); }
+
+  function renderCalc() {
+    const [w0, w1, w2] = state.w, [x1, x2] = state.q;
+    const z = zOf(x1, x2), p = sigmoid(z), cls = p >= 0.5 ? 1 : 0;
+    document.getElementById("calc").innerHTML =
+      `<i>z</i> = <i>w</i><sub>0</sub> + <i>w</i><sub>1</sub><i>x</i><sub>1</sub> + <i>w</i><sub>2</sub><i>x</i><sub>2</sub>` +
+      ` = ${f2(w0)} + ${par(w1)}·${par(x1)} + ${par(w2)}·${par(x2)} = <b class="zc">${f2(z)}</b><br>` +
+      `<i class="pc">ŷ</i> = <i>σ</i>(${f2(z)}) = 1 / (1 + <i>e</i><sup>${z >= 0 ? "−" : ""}${Math.abs(z).toFixed(2)}</sup>) = <b class="pc">${p.toFixed(3)}</b>` +
+      `<br><span class="verdict" style="color:${cls ? C.c1 : C.c0}">ŷ ${cls ? "≥" : "<"} 0.5 ⇒ predict class ${cls}</span>`;
+
+    let loss = 0, correct = 0;
+    DATA.forEach(([a, b, c]) => {
+      const pp = Math.min(1 - 1e-12, Math.max(1e-12, sigmoid(zOf(a, b))));
+      loss -= c ? Math.log(pp) : Math.log(1 - pp);
+      correct += (pp >= 0.5) === (c === 1);
+    });
+    document.getElementById("loss").textContent = (loss / DATA.length).toFixed(4);
+    document.getElementById("acc").textContent = `${correct} / ${DATA.length}`;
+    document.getElementById("step").textContent = state.steps ? `GD step ${state.steps}` : "";
+  }
+
+  function syncControls() {
+    const set = (id, v) => {
+      document.getElementById("s_" + id).value = v;
+      document.getElementById("o_" + id).textContent = v.toFixed(2);
+    };
+    set("w0", state.w[0]); set("w1", state.w[1]); set("w2", state.w[2]);
+    set("x1", state.q[0]); set("x2", state.q[1]);
+    document.getElementById("tPlane").checked = state.plane;
+    document.getElementById("tSig").checked = state.sig;
+    document.getElementById("tRegions").checked = state.regions;
+  }
+
+  function render() {
+    if (!W) return;
+    render3d(); renderSig(); renderCalc(); syncControls();
+  }
+
+  // ---------- Controls ----------
+  ["w0", "w1", "w2"].forEach((id, k) => {
+    document.getElementById("s_" + id).addEventListener("input", e => {
+      stopTrain(); state.w[k] = parseFloat(e.target.value); state.steps = 0; render();
+    });
+  });
+  ["x1", "x2"].forEach((id, k) => {
+    document.getElementById("s_" + id).addEventListener("input", e => { state.q[k] = parseFloat(e.target.value); render(); });
+  });
+  document.getElementById("tPlane").addEventListener("change", e => { state.plane = e.target.checked; render(); });
+  document.getElementById("tSig").addEventListener("change", e => { state.sig = e.target.checked; render(); });
+  document.getElementById("tRegions").addEventListener("change", e => { state.regions = e.target.checked; render(); });
+  document.getElementById("bView").addEventListener("click", () => { state.view = { a: 0.55, e: 0.38 }; render(); });
+  document.getElementById("bReset").addEventListener("click", () => { stopTrain(); state.w = [...W_START]; state.steps = 0; render(); });
+
+  // Gradient descent on the mean cross-entropy
+  let trainAnim = null;
+  function stopTrain() { cancelAnimationFrame(trainAnim); trainAnim = null; }
+  document.getElementById("bTrain").addEventListener("click", () => {
+    stopTrain();
+    const lr = 0.5, perFrame = 2, maxSteps = 300;
+    let done = 0;
+    const frame = () => {
+      for (let k = 0; k < perFrame; k++) {
+        const g = [0, 0, 0];
+        DATA.forEach(([a, b, c]) => {
+          const r = sigmoid(zOf(a, b)) - c;
+          g[0] += r; g[1] += r * a; g[2] += r * b;
+        });
+        for (let i = 0; i < 3; i++) state.w[i] -= lr * g[i] / DATA.length;
+        state.steps++; done++;
+      }
+      render();
+      if (done < maxSteps) trainAnim = requestAnimationFrame(frame);
+    };
+    trainAnim = requestAnimationFrame(frame);
+  });
+
+  // Rotate by dragging; a click without dragging moves the query point
+  let drag = null;
+  cv.addEventListener("pointerdown", e => {
+    drag = { x: e.clientX, y: e.clientY, moved: false, a: state.view.a, e: state.view.e };
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.hypot(dx, dy) > 4) drag.moved = true;
+    if (drag.moved) {
+      cv.classList.add("dragging");
+      state.view.a = drag.a + dx * 0.01;
+      state.view.e = Math.min(1.5, Math.max(0.08, drag.e + dy * 0.008));
+      render();
+    }
+  });
+  cv.addEventListener("pointerup", e => {
+    if (drag && !drag.moved) {
+      const r = cv.getBoundingClientRect();
+      const [x, y] = unprojectFloor(e.clientX - r.left, e.clientY - r.top);
+      if (Math.abs(x) <= XR && Math.abs(y) <= XR) { state.q = [x, y]; render(); }
+    }
+    drag = null; cv.classList.remove("dragging");
+  });
+
+  new ResizeObserver(resize).observe(cv);
+})();
+</script>
+</body>
+</html>
