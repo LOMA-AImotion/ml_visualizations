@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entropy and Cross-Entropy</title>
+<style>
+  :root {
+    --ink: #263238;
+    --muted: #607080;
+    --q: #8E24AA;
+    --panel: #f4f6f8;
+    --tint: #f6eef9;
+    --glass: #e3eaee;
+    --glass-edge: #90a4ae;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1320px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.1rem; margin: 0; }
+  .sub { color: var(--muted); margin: 0 0 12px; }
+  .m { font-family: var(--math); }
+  .m i, i.m { font-style: italic; }
+  .qc { color: var(--q); }
+  .top { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 14px; }
+  .seg { display: inline-flex; border: 1px solid #bbb; border-radius: 8px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; }
+  .seg button.on { background: var(--ink); color: #fff; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer;
+  }
+  button:hover:not(.on) { background: #eee; }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border-radius: 12px; padding: 12px 16px; }
+  .cardhead { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .def { font-family: var(--math); font-size: 1.15rem; }
+  .q-card .cardhead h2 { color: var(--q); }
+  .bowlrow { display: grid; grid-template-columns: 210px 1fr; gap: 14px; align-items: center; margin-top: 6px; }
+  @media (max-width: 520px) { .bowlrow { grid-template-columns: 1fr; } }
+  .bowlrow svg { width: 100%; height: auto; display: block; }
+  .sliders { display: grid; grid-template-columns: 18px 1fr 3.6em; gap: 6px 10px; align-items: center; }
+  .sliders output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  .dot { width: 16px; height: 16px; border-radius: 50%; display: inline-block; }
+  input[type=range] { width: 100%; }
+  .note { font-size: 0.85rem; color: var(--muted); margin: 8px 0 0; line-height: 1.45; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; margin-top: 18px; }
+  th { background: #555; color: #fff; font-weight: 600; padding: 6px; text-align: center; }
+  th .m { font-size: 1.05rem; }
+  td { padding: 5px 6px; text-align: center; border-bottom: 1px solid #e3e3e3; }
+  tfoot td { border-top: 2px solid #555; font-weight: 600; background: #fafafa; }
+  .summary { background: var(--tint); border-radius: 12px; padding: 12px 16px; margin-top: 18px; }
+  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 8px; }
+  @media (max-width: 640px) { .metrics { grid-template-columns: 1fr; } }
+  .metric { background: #fff; border-radius: 10px; padding: 8px 12px; }
+  .metric .lbl { font-size: 0.82rem; color: var(--muted); }
+  .metric .val { font-size: 1.4rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .metric .val.inf { color: #C62828; }
+  .identity { font-family: var(--math); font-size: 1.15rem; text-align: center; margin: 6px 0 2px; }
+  .bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 18px; }
+  @media (max-width: 900px) { .bottom { grid-template-columns: 1fr; } }
+  svg text { font-family: system-ui, sans-serif; }
+  .draws { display: flex; flex-wrap: wrap; gap: 3px; min-height: 16px; margin: 8px 0; }
+  .draws span { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .unit { display: inline-flex; gap: 6px; align-items: center; font-size: 0.95rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Entropy and cross-entropy: how surprised are we?</h1>
+  <p class="sub">Draw one ball from the bowl. A colour with probability <i class="m">p</i> surprises us by
+    <span class="m">−log <i>p</i></span>. Entropy is the average surprise under the true bowl <i class="m">p</i>;
+    cross-entropy measures the surprise with a model <i class="m qc">q</i> while the balls still come from <i class="m">p</i>.</p>
+
+  <div class="top">
+    <div class="seg" role="group" aria-label="Number of outcomes">
+      <button id="mode2">2 outcomes (binary)</button><button id="mode4">4 outcomes</button>
+    </div>
+    <div class="presets" id="presets"></div>
+    <label class="unit">unit
+      <select id="unit"><option value="2">bits (log₂)</option><option value="e">nats (ln)</option></select>
+    </label>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="cardhead"><h2>True bowl <i class="m">p</i>: entropy</h2>
+        <span class="def"><i>H</i>(<i>p</i>) = −∑<sub><i>i</i></sub> <i>p<sub>i</sub></i> log <i>p<sub>i</sub></i></span></div>
+      <div class="bowlrow"><svg id="bowlP" viewBox="0 0 210 130" aria-label="True bowl"></svg>
+        <div class="sliders" id="slP"></div></div>
+    </div>
+    <div class="card q-card">
+      <div class="cardhead"><h2>Model <i class="m">q</i>: cross-entropy</h2>
+        <span class="def"><i>H</i>(<i>p</i>, <i class="qc">q</i>) = −∑<sub><i>i</i></sub> <i>p<sub>i</sub></i> log <i class="qc">q<sub>i</sub></i></span></div>
+      <div class="bowlrow"><svg id="bowlQ" viewBox="0 0 210 130" aria-label="Model bowl"></svg>
+        <div class="sliders" id="slQ"></div></div>
+    </div>
+  </div>
+  <p class="note">Moving one slider rescales the other colours of the same bowl, so the probabilities always sum to 1.
+    The bowls show 16 balls, rounded to the nearest whole ball.</p>
+
+  <table>
+    <thead><tr>
+      <th>colour</th><th class="m"><i>p<sub>i</sub></i></th><th class="m"><i>q<sub>i</sub></i></th>
+      <th class="m">−log <i>p<sub>i</sub></i></th><th class="m">−log <i>q<sub>i</sub></i></th>
+      <th class="m"><i>p<sub>i</sub></i> · (−log <i>p<sub>i</sub></i>)</th>
+      <th class="m"><i>p<sub>i</sub></i> · (−log <i>q<sub>i</sub></i>)</th>
+    </tr></thead>
+    <tbody id="rows"></tbody>
+    <tfoot id="foot"></tfoot>
+  </table>
+
+  <div class="summary">
+    <div class="metrics">
+      <div class="metric"><div class="lbl">Entropy <span class="m"><i>H</i>(<i>p</i>)</span></div><div class="val" id="vH"></div></div>
+      <div class="metric"><div class="lbl">Cross-entropy <span class="m"><i>H</i>(<i>p</i>, <i>q</i>)</span></div><div class="val qc" id="vHPQ"></div></div>
+      <div class="metric"><div class="lbl">KL divergence <span class="m"><i>D</i><sub>KL</sub>(<i>p</i> ‖ <i>q</i>)</span></div><div class="val" id="vKL"></div></div>
+    </div>
+    <svg id="stack" viewBox="0 0 900 120" aria-label="Stacked contributions to entropy and cross-entropy"></svg>
+    <div class="identity"><i>H</i>(<i>p</i>, <i class="qc">q</i>) = <i>H</i>(<i>p</i>) + <i class="qc">D</i><sub class="qc">KL</sub>(<i>p</i> ‖ <i class="qc">q</i>) ≥ <i>H</i>(<i>p</i>)
+      &nbsp;— equality only when <i class="qc">q</i> = <i>p</i></div>
+  </div>
+
+  <div class="bottom">
+    <div class="card">
+      <h2>Cross-entropy as the model changes</h2>
+      <svg id="curve" viewBox="0 0 600 300" aria-label="Cross-entropy as a function of q red"></svg>
+      <p class="note" id="curveNote"></p>
+    </div>
+    <div class="card">
+      <h2>Draw balls from the true bowl</h2>
+      <div class="presets" style="margin-top:8px">
+        <button id="draw1">Draw 1</button><button id="draw100">Draw 100</button><button id="drawReset">Reset</button>
+      </div>
+      <div class="draws" id="draws"></div>
+      <svg id="mc" viewBox="0 0 600 220" aria-label="Running average surprise"></svg>
+      <p class="note">Each ball costs <span class="m">−log <i>p</i>(colour)</span> with the true bowl and
+        <span class="m">−log <i class="qc">q</i>(colour)</span> with the model. Their running averages converge to
+        <i class="m">H</i>(<i class="m">p</i>) and <i class="m">H</i>(<i class="m">p</i>, <i class="m qc">q</i>):
+        cross-entropy is just the average loss of the model on data from <i class="m">p</i>.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  const COLORS = [
+    { name: "red", c: "#E53935" }, { name: "blue", c: "#1E88E5" },
+    { name: "green", c: "#43A047" }, { name: "amber", c: "#FB8C00" },
+  ];
+  const Q_COLOR = "#8E24AA", INK = "#263238", MUTED = "#607080";
+  const Q_MIN = 0.01;   // keep q away from 0, where cross-entropy is infinite
+  const PRESETS = {
+    2: [
+      { label: "3/4 vs fair coin", p: [0.75, 0.25], q: [0.5, 0.5] },
+      { label: "q = p", p: [0.75, 0.25], q: [0.75, 0.25] },
+      { label: "confident and wrong", p: [0.75, 0.25], q: [0.05, 0.95] },
+      { label: "label y = 1 (BCE)", p: [1, 0], q: [0.8, 0.2] },
+    ],
+    4: [
+      { label: "1/2, 1/4, 1/8, 1/8 vs uniform", p: [0.5, 0.25, 0.125, 0.125], q: [0.25, 0.25, 0.25, 0.25] },
+      { label: "q = p", p: [0.5, 0.25, 0.125, 0.125], q: [0.5, 0.25, 0.125, 0.125] },
+      { label: "q reversed", p: [0.5, 0.25, 0.125, 0.125], q: [0.125, 0.125, 0.25, 0.5] },
+      { label: "one-hot label (classification)", p: [0, 1, 0, 0], q: [0.1, 0.6, 0.2, 0.1] },
+    ],
+  };
+  const state = { k: 2, p: [], q: [], base: 2, draws: [] };
+
+  const logb = v => Math.log(v) / (state.base === 2 ? Math.LN2 : 1);
+  const unit = () => state.base === 2 ? "bits" : "nats";
+  const fmt = v => !isFinite(v) ? "∞" : Math.abs(v) < 5e-4 ? "0" : v.toFixed(3);
+  const plogq = (p, q) => p === 0 ? 0 : -p * logb(q);  // 0 · log 0 = 0
+  const entropy = p => p.reduce((s, pi) => s + plogq(pi, pi), 0);
+  const cross = (p, q) => p.reduce((s, pi, i) => s + plogq(pi, q[i]), 0);
+
+  // ---------- probabilities ----------
+  function setProb(which, i, v) {
+    const arr = state[which], lo = which === "q" ? Q_MIN : 0;
+    const n = arr.length, vMax = 1 - lo * (n - 1);
+    v = Math.min(Math.max(v, lo), vMax);
+    const rest = arr.reduce((s, x, j) => j === i ? s : s + x, 0);
+    const target = 1 - v;
+    arr.forEach((x, j) => {
+      if (j === i) return;
+      arr[j] = rest > 1e-12 ? x / rest * target : target / (n - 1);
+    });
+    arr[i] = v;
+    if (lo > 0) {  // keep every q above Q_MIN, then renormalise
+      for (let j = 0; j < n; j++) arr[j] = Math.max(arr[j], lo);
+      const s = arr.reduce((a, b) => a + b, 0);
+      for (let j = 0; j < n; j++) arr[j] /= s;
+    }
+  }
+
+  function buildSliders() {
+    for (const which of ["p", "q"]) {
+      const host = document.getElementById(which === "p" ? "slP" : "slQ");
+      host.innerHTML = "";
+      for (let i = 0; i < state.k; i++) {
+        const dot = document.createElement("span");
+        dot.className = "dot"; dot.style.background = COLORS[i].c;
+        dot.title = COLORS[i].name;
+        const r = document.createElement("input");
+        r.type = "range"; r.min = 0; r.max = 1; r.step = 0.005;
+        r.id = `${which}${i}`;
+        r.setAttribute("aria-label", `${which} of ${COLORS[i].name}`);
+        r.addEventListener("input", e => { setProb(which, i, parseFloat(e.target.value)); resetDraws(); render(); });
+        const o = document.createElement("output"); o.id = `${which}${i}o`;
+        host.append(dot, r, o);
+        if (state.k === 2 && i === 0) {  // binary: one slider is enough, the other is 1 - it
+          const hint = document.createElement("span");
+          hint.style.gridColumn = "1 / -1"; hint.className = "note"; hint.style.margin = "0";
+          host.append(hint);
+          hint.id = `${which}hint`;
+        }
+      }
+      if (state.k === 2) {  // hide the second slider row, show its value in the hint
+        host.children[4].style.display = "none";
+        host.children[5].style.display = "none";
+        host.children[6].style.display = "none";
+      }
+    }
+  }
+
+  // ---------- bowls ----------
+  const N_BALLS = 16;
+  function ballCounts(p) {
+    const raw = p.map(x => x * N_BALLS), cnt = raw.map(Math.floor);
+    let left = N_BALLS - cnt.reduce((a, b) => a + b, 0);
+    raw.map((x, i) => [x - Math.floor(x), i]).sort((a, b) => b[0] - a[0])
+      .forEach(([, i]) => { if (left > 0) { cnt[i]++; left--; } });
+    return cnt;
+  }
+  // scatter colours deterministically so the bowl does not look sorted
+  const SHUFFLE = [3, 10, 0, 14, 6, 9, 1, 12, 5, 15, 2, 8, 13, 4, 11, 7];
+  function renderBowl(svgId, p) {
+    const cnt = ballCounts(p), seq = [];
+    cnt.forEach((c, i) => { for (let j = 0; j < c; j++) seq.push(i); });
+    const placed = new Array(N_BALLS);
+    SHUFFLE.forEach((slot, j) => { placed[slot] = seq[j]; });
+    const rows = [6, 5, 5], d = 22, cx = 105, rimY = 30, depth = 88, a = 92;
+    let s = "";
+    let path = `M${cx - a},${rimY}`;
+    for (let t = 0; t <= 40; t++) {
+      const th = Math.PI * t / 40;
+      path += ` L${(cx - a * Math.cos(th)).toFixed(1)},${(rimY + depth * Math.sin(th)).toFixed(1)}`;
+    }
+    s += `<path d="${path} Z" fill="var(--glass)" stroke="var(--glass-edge)" stroke-width="2"/>`;
+    let k = 0;
+    rows.forEach((n, row) => {
+      const y = rimY + depth - d * 0.75 - row * d * 0.9;
+      for (let j = 0; j < n; j++) {
+        const x = cx + (j - (n - 1) / 2) * d * 1.04;
+        s += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${d / 2}" fill="${COLORS[placed[k]].c}" stroke="#fff" stroke-width="1.5"/>`;
+        k++;
+      }
+    });
+    document.getElementById(svgId).innerHTML = s;
+  }
+
+  // ---------- table + metrics ----------
+  function renderTable() {
+    const { p, q } = state;
+    let html = "";
+    for (let i = 0; i < state.k; i++) {
+      html += `<tr><td><span class="dot" style="background:${COLORS[i].c};vertical-align:middle"></span> ${COLORS[i].name}</td>` +
+        `<td>${fmt(p[i])}</td><td class="qc">${fmt(q[i])}</td>` +
+        `<td>${p[i] > 0 ? fmt(-logb(p[i])) : "∞"}</td><td class="qc">${fmt(-logb(q[i]))}</td>` +
+        `<td><b>${fmt(plogq(p[i], p[i]))}</b></td><td class="qc"><b>${fmt(plogq(p[i], q[i]))}</b></td></tr>`;
+    }
+    document.getElementById("rows").innerHTML = html;
+    const H = entropy(p), HPQ = cross(p, q);
+    document.getElementById("foot").innerHTML =
+      `<tr><td>sum</td><td>1</td><td class="qc">1</td><td></td><td></td>` +
+      `<td>H(p) = ${fmt(H)}</td><td class="qc">H(p, q) = ${fmt(HPQ)}</td></tr>`;
+    document.getElementById("vH").textContent = `${fmt(H)} ${unit()}`;
+    document.getElementById("vHPQ").textContent = `${fmt(HPQ)} ${unit()}`;
+    document.getElementById("vKL").textContent = `${fmt(HPQ - H)} ${unit()}`;
+  }
+
+  // ---------- stacked bars ----------
+  function renderStack() {
+    const { p, q } = state, H = entropy(p), HPQ = cross(p, q);
+    const maxBits = Math.max(2.2, HPQ * 1.05);   // fixed-ish scale so changes are visible
+    const L = 90, R = 150, Wd = 900, sc = v => v / maxBits * (Wd - L - R);
+    let s = "";
+    const rows = [
+      { y: 18, label: "H(p)", c: INK, vals: p.map(pi => plogq(pi, pi)), tot: H },
+      { y: 70, label: "H(p, q)", c: Q_COLOR, vals: p.map((pi, i) => plogq(pi, q[i])), tot: HPQ },
+    ];
+    rows.forEach(rw => {
+      s += `<text x="${L - 12}" y="${rw.y + 21}" text-anchor="end" font-size="17" font-style="italic" font-family="serif" fill="${rw.c}" font-weight="600">${rw.label}</text>`;
+      let x = L;
+      rw.vals.forEach((v, i) => {
+        const w = sc(v);
+        if (w <= 0) return;
+        s += `<rect x="${x.toFixed(1)}" y="${rw.y}" width="${w.toFixed(1)}" height="32" fill="${COLORS[i].c}" stroke="#fff" stroke-width="1.5"/>`;
+        if (w > 42) s += `<text x="${(x + w / 2).toFixed(1)}" y="${rw.y + 21}" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">${fmt(v)}</text>`;
+        x += w;
+      });
+    });
+    const xH = L + sc(H), xQ = L + sc(HPQ), xTot = Math.max(xH, xQ) + 12;
+    if (xQ - xH > 1) {
+      s += `<rect x="${xH.toFixed(1)}" y="18" width="${(xQ - xH).toFixed(1)}" height="32" fill="none" stroke="${Q_COLOR}" stroke-width="2" stroke-dasharray="6 4"/>`;
+      s += `<text x="${((xH + xQ) / 2).toFixed(1)}" y="12" text-anchor="middle" font-size="12" font-weight="700" fill="${Q_COLOR}">KL = ${fmt(HPQ - H)}</text>`;
+    }
+    s += `<text x="${xTot}" y="39" font-size="16" font-weight="700" fill="${INK}">${fmt(H)} ${unit()}</text>`;
+    s += `<text x="${xTot}" y="91" font-size="16" font-weight="700" fill="${Q_COLOR}">${fmt(HPQ)} ${unit()}</text>`;
+    document.getElementById("stack").innerHTML = s;
+  }
+
+  // ---------- H(p, q) as q_red varies ----------
+  function qAlongRed(t) {
+    // q_red = t, the other colours keep their current ratios
+    const q = [...state.q], rest = q.slice(1).reduce((a, b) => a + b, 0);
+    return q.map((x, i) => i === 0 ? t : (rest > 0 ? x / rest * (1 - t) : (1 - t) / (q.length - 1)));
+  }
+  function renderCurve() {
+    const Wd = 600, Ht = 300, P = { l: 52, r: 16, t: 14, b: 44 };
+    const { p, q } = state, H = entropy(p);
+    const ts = [], ys = [];
+    for (let j = 1; j < 200; j++) { const t = j / 200; ts.push(t); ys.push(cross(p, qAlongRed(t))); }
+    const yMax = Math.max(1, Math.ceil(Math.min(Math.max(...ys.filter(isFinite)), H + 4) * 2) / 2);
+    const sx = t => P.l + t * (Wd - P.l - P.r), sy = v => Ht - P.b - Math.min(v, yMax) / yMax * (Ht - P.t - P.b);
+    let s = `<rect x="${P.l}" y="${P.t}" width="${Wd - P.l - P.r}" height="${Ht - P.t - P.b}" fill="#fff" stroke="#ccc"/>`;
+    const stepY = yMax <= 2 ? 0.5 : 1;
+    for (let v = 0; v <= yMax + 1e-9; v += stepY) {
+      s += `<line x1="${P.l}" x2="${Wd - P.r}" y1="${sy(v)}" y2="${sy(v)}" stroke="#eee"/>`;
+      s += `<text x="${P.l - 6}" y="${sy(v) + 4}" text-anchor="end" font-size="12" fill="${MUTED}">${v}</text>`;
+    }
+    for (let t = 0; t <= 1.0001; t += 0.25) {
+      s += `<text x="${sx(t)}" y="${Ht - P.b + 18}" text-anchor="middle" font-size="12" fill="${MUTED}">${t}</text>`;
+    }
+    s += `<text x="${(P.l + Wd - P.r) / 2}" y="${Ht - 6}" text-anchor="middle" font-size="14" fill="${INK}">model probability of red, q(red)</text>`;
+    s += `<text transform="translate(14 ${(P.t + Ht - P.b) / 2}) rotate(-90)" text-anchor="middle" font-size="13" fill="${MUTED}">${unit()}</text>`;
+    // H(p) floor
+    s += `<line x1="${P.l}" x2="${Wd - P.r}" y1="${sy(H)}" y2="${sy(H)}" stroke="${INK}" stroke-dasharray="6 5"/>`;
+    s += `<text x="${Wd - P.r - 6}" y="${sy(H) - 6}" text-anchor="end" font-size="13" fill="${INK}">H(p) = ${fmt(H)}</text>`;
+    let d = "";
+    ts.forEach((t, j) => { d += (j ? "L" : "M") + sx(t).toFixed(1) + "," + sy(ys[j]).toFixed(1); });
+    s += `<path d="${d}" fill="none" stroke="${Q_COLOR}" stroke-width="2.5"/>`;
+    // minimum (q_red = p_red when the other ratios match p)
+    const jMin = ys.indexOf(Math.min(...ys));
+    s += `<circle cx="${sx(ts[jMin])}" cy="${sy(ys[jMin])}" r="4" fill="#fff" stroke="${Q_COLOR}" stroke-width="2"/>`;
+    const cur = cross(p, q);
+    s += `<circle cx="${sx(q[0])}" cy="${sy(cur)}" r="7" fill="${Q_COLOR}" stroke="#fff" stroke-width="2"/>`;
+    s += `<line x1="${sx(p[0])}" x2="${sx(p[0])}" y1="${P.t}" y2="${Ht - P.b}" stroke="${COLORS[0].c}" stroke-dasharray="3 4"/>`;
+    s += `<text x="${sx(p[0]) + 4}" y="${P.t + 14}" font-size="12" fill="${COLORS[0].c}">p(red) = ${fmt(p[0])}</text>`;
+    document.getElementById("curve").innerHTML = s;
+    document.getElementById("curveNote").innerHTML = state.k === 2
+      ? "Binary case: the curve is the binary cross-entropy of a model predicting <i>q</i>(red). It never drops below the dashed entropy line and touches it exactly at <i>q</i> = <i>p</i>. Click the plot to set <i>q</i>(red)."
+      : "Along this slice only <i>q</i>(red) moves; the other colours keep their current ratios. The minimum touches <i>H</i>(<i>p</i>) only if those ratios already match <i>p</i>. Click the plot to set <i>q</i>(red).";
+  }
+  document.getElementById("curve").addEventListener("click", e => {
+    const svg = e.currentTarget, pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const loc = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const t = (loc.x - 52) / (600 - 52 - 16);
+    if (t <= 0 || t >= 1) return;
+    setProb("q", 0, t);  // rescales the other colours, i.e. moves along the plotted slice
+    resetDraws(); render();
+  });
+
+  // ---------- sampling ----------
+  function sample() {
+    let u = Math.random(), i = 0;
+    while (i < state.k - 1 && u >= state.p[i]) { u -= state.p[i]; i++; }
+    return i;
+  }
+  function resetDraws() { state.draws = []; }
+  function renderDraws() {
+    const shown = state.draws.slice(-120);
+    document.getElementById("draws").innerHTML =
+      shown.map(i => `<span style="background:${COLORS[i].c}" title="${COLORS[i].name}"></span>`).join("");
+    const Wd = 600, Ht = 220, P = { l: 52, r: 110, t: 12, b: 34 };
+    const { p, q } = state, H = entropy(p), HPQ = cross(p, q);
+    const n = state.draws.length, nMax = Math.max(20, n);
+    let sp = 0, sq = 0;
+    const avP = [], avQ = [];
+    state.draws.forEach((i, j) => { sp += -logb(p[i]); sq += -logb(q[i]); avP.push(sp / (j + 1)); avQ.push(sq / (j + 1)); });
+    const yMax = Math.max(1, Math.ceil(Math.max(HPQ, ...avQ.slice(0, 400), ...avP.slice(0, 400), 0) * 1.15));
+    const sx = j => P.l + j / nMax * (Wd - P.l - P.r), sy = v => Ht - P.b - Math.min(v, yMax) / yMax * (Ht - P.t - P.b);
+    let s = `<rect x="${P.l}" y="${P.t}" width="${Wd - P.l - P.r}" height="${Ht - P.t - P.b}" fill="#fff" stroke="#ccc"/>`;
+    for (let v = 0; v <= yMax; v += yMax <= 3 ? 0.5 : 1) {
+      s += `<text x="${P.l - 6}" y="${sy(v) + 4}" text-anchor="end" font-size="12" fill="${MUTED}">${v}</text>`;
+    }
+    s += `<text x="${(P.l + Wd - P.r) / 2}" y="${Ht - 8}" text-anchor="middle" font-size="13" fill="${INK}">number of draws (${n})</text>`;
+    s += `<line x1="${P.l}" x2="${Wd - P.r}" y1="${sy(H)}" y2="${sy(H)}" stroke="${INK}" stroke-dasharray="6 5"/>`;
+    s += `<line x1="${P.l}" x2="${Wd - P.r}" y1="${sy(HPQ)}" y2="${sy(HPQ)}" stroke="${Q_COLOR}" stroke-dasharray="6 5"/>`;
+    const sep = Math.max(0, 14 - (sy(H) - sy(HPQ))) / 2;  // push close labels apart
+    s += `<text x="${Wd - P.r + 6}" y="${sy(H) + 4 + sep}" font-size="12" fill="${INK}">H(p) ${fmt(H)}</text>`;
+    s += `<text x="${Wd - P.r + 6}" y="${sy(HPQ) + 4 - sep}" font-size="12" fill="${Q_COLOR}">H(p,q) ${fmt(HPQ)}</text>`;
+    const line = (av, c) => {
+      if (!av.length) return "";
+      let d = "";
+      av.forEach((v, j) => { d += (j ? "L" : "M") + sx(j + 1).toFixed(1) + "," + sy(v).toFixed(1); });
+      return `<path d="${d}" fill="none" stroke="${c}" stroke-width="2"/>`;
+    };
+    s += line(avP, INK) + line(avQ, Q_COLOR);
+    document.getElementById("mc").innerHTML = s;
+  }
+  document.getElementById("draw1").addEventListener("click", () => { state.draws.push(sample()); renderDraws(); });
+  document.getElementById("draw100").addEventListener("click", () => {
+    for (let j = 0; j < 100; j++) state.draws.push(sample());
+    renderDraws();
+  });
+  document.getElementById("drawReset").addEventListener("click", () => { resetDraws(); renderDraws(); });
+
+  // ---------- wiring ----------
+  function sync() {
+    for (const which of ["p", "q"]) {
+      for (let i = 0; i < state.k; i++) {
+        document.getElementById(`${which}${i}`).value = state[which][i];
+        document.getElementById(`${which}${i}o`).textContent = state[which][i].toFixed(3);
+      }
+      if (state.k === 2) {
+        document.getElementById(`${which}hint`).innerHTML =
+          `<span class="dot" style="background:${COLORS[1].c};width:10px;height:10px"></span> ${COLORS[1].name} = 1 − ${COLORS[0].name} = <b>${state[which][1].toFixed(3)}</b>`;
+      }
+    }
+    document.getElementById("mode2").classList.toggle("on", state.k === 2);
+    document.getElementById("mode4").classList.toggle("on", state.k === 4);
+  }
+  function render() {
+    renderBowl("bowlP", state.p); renderBowl("bowlQ", state.q);
+    renderTable(); renderStack(); renderCurve(); renderDraws(); sync();
+  }
+  function applyPreset(pr) { state.p = [...pr.p]; state.q = [...pr.q]; resetDraws(); render(); }
+  function setMode(k) {
+    state.k = k;
+    const host = document.getElementById("presets");
+    host.innerHTML = "";
+    PRESETS[k].forEach(pr => {
+      const b = document.createElement("button");
+      b.textContent = pr.label;
+      b.addEventListener("click", () => applyPreset(pr));
+      host.append(b);
+    });
+    buildSliders();
+    applyPreset(PRESETS[k][0]);
+  }
+  document.getElementById("mode2").addEventListener("click", () => setMode(2));
+  document.getElementById("mode4").addEventListener("click", () => setMode(4));
+  document.getElementById("unit").addEventListener("change", e => {
+    state.base = e.target.value === "2" ? 2 : Math.E; render();
+  });
+  setMode(location.hash === "#4" ? 4 : 2);  // entropy_interactive.html#4 opens the four-colour bowl
+})();
+</script>
+</body>
+</html>

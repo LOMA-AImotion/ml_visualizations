@@ -20,6 +20,7 @@ Interactive demonstrations of fundamental probability distributions and concepts
 - [Discrete Uniform Distribution](https://loma-aimotion.github.io/ml_visualizations/discrete-uniform.html) - Discrete uniform distribution visualization
 - [Continuous Uniform Distribution](https://loma-aimotion.github.io/ml_visualizations/continuous-uniform.html) - Continuous uniform distribution
 - [Parametric Distributions](https://loma-aimotion.github.io/ml_visualizations/parametric-dist-plotly.html) - Exploration of parametric distribution families
+- [Entropy and Cross-Entropy](https://loma-aimotion.github.io/ml_visualizations/entropy_interactive.html) - How surprised are we? Compare a true distribution with a model to see entropy, cross-entropy and KL divergence, and draw samples to watch cross-entropy emerge as the model's average loss
 
 ## 📈 Statistics
 
