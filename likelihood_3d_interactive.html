@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Likelihood Explorer 3D</title>
+<style>
+  :root {
+    --ink: #111;
+    --muted: #777;
+    --p: #F57C00;
+    --lik: #2E7D32;
+    --male: #2A93C2;
+    --female: #C0392B;
+    --z: #8E24AA;
+    --panel: #f6f6f6;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1320px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .m { font-family: var(--math); }
+  .m i { font-style: italic; }
+  .pc { color: var(--p); } .lc { color: var(--lik); } .zc { color: var(--z); }
+  .male { color: var(--male); font-weight: 600; } .female { color: var(--female); font-weight: 600; }
+  .formula { font-size: 1.2rem; text-align: center; margin: 2px 0 12px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  canvas { width: 100%; aspect-ratio: 1 / 0.82; display: block; cursor: grab; touch-action: none; }
+  canvas.dragging { cursor: grabbing; }
+  .hint { color: var(--muted); font-size: 0.88rem; margin: 4px 0 0; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 6px; font-size: 0.95rem; }
+  .toggles label { display: inline-flex; gap: 6px; align-items: center; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th { background: #555; color: #fff; font-weight: 600; padding: 6px; text-align: center; }
+  th .m { font-size: 1.05rem; }
+  td { padding: 5px 6px; text-align: center; border-bottom: 1px solid #e3e3e3; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #fafafa; }
+  tbody tr.sel { background: #FFF1E0; outline: 2px solid var(--p); outline-offset: -2px; }
+  tfoot td { border-top: 2px solid #555; font-weight: 600; }
+  .bar { position: relative; height: 18px; background: #eee; border-radius: 3px; min-width: 80px; }
+  .bar > span { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: var(--lik); opacity: 0.75; }
+  .bar > b { position: relative; font-size: 0.85rem; line-height: 18px; }
+  .calc {
+    background: var(--panel); border-radius: 10px; padding: 10px 14px; margin: 12px 0;
+    font-family: var(--math); font-size: 1.1rem; line-height: 1.75; font-variant-numeric: tabular-nums;
+  }
+  .calc .head { font-family: system-ui, sans-serif; font-size: 0.9rem; color: var(--muted); }
+  .total { border-top: 1px solid #ddd; margin-top: 6px; padding-top: 6px; }
+  .controls {
+    display: grid; grid-template-columns: auto 1fr 4.5em; gap: 6px 10px; align-items: center;
+    background: var(--panel); border-radius: 10px; padding: 12px 14px;
+  }
+  .controls .name { font-family: var(--math); font-size: 1.2rem; font-style: italic; }
+  .controls output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type=range] { width: 100%; }
+  .buttons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer;
+  }
+  button:hover { background: #eee; }
+  .status { grid-column: 1 / -1; font-size: 0.9rem; color: var(--muted); min-height: 1.2em; }
+</style>
+</head>
+<body>
+<main>
+  <h1>How likely is the observed data under this model?</h1>
+  <div class="formula m" id="formula"></div>
+
+  <div class="layout">
+    <div>
+      <canvas id="c3d" aria-label="3D view: feature plane, surface of P(y=1|x), and the probability of each observed label"></canvas>
+      <div class="toggles">
+        <label><input type="checkbox" id="tSurf" checked> <span class="pc">surface <i class="m">P</i>(<i class="m">y</i>=1 | <b class="m">x</b>)</span></label>
+        <label><input type="checkbox" id="tAll" checked> columns for all points</label>
+        <button id="bView">Reset view</button>
+      </div>
+      <p class="hint">Drag to rotate. Click a data point (or a table row) to select it.
+        The green bar is the probability the model gives to the <b>observed</b> label:
+        from 0 up to <i class="m">ŷ</i> if <i class="m">y</i> = 1, from <i class="m">ŷ</i> up to 1 if <i class="m">y</i> = 0.</p>
+    </div>
+
+    <div>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>stature</th><th>interscye</th><th class="m"><i>y</i></th>
+            <th class="m"><i>z</i></th><th class="m"><i>ŷ</i></th><th class="m"><i>p</i>(<i>y</i> | <b>x</b>)</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+
+      <div class="calc" id="calc"></div>
+
+      <div class="controls">
+        <span class="name">w<sub>0</sub></span><input id="s0" type="range" min="-5" max="5" step="0.01"><output id="o0"></output>
+        <span class="name">w<sub>1</sub></span><input id="s1" type="range" min="-2" max="2" step="0.01"><output id="o1"></output>
+        <span class="name">w<sub>2</sub></span><input id="s2" type="range" min="-2" max="2" step="0.01"><output id="o2"></output>
+        <div class="buttons">
+          <button id="bVideo">Model from the video</button>
+          <button id="bBad">Bad model (wrong sign)</button>
+          <button id="bAscent">Maximise likelihood (gradient ascent)</button>
+        </div>
+        <div class="status" id="status"></div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  // [stature, interscye, y (1 = male)]
+  const DATA = [[181, 46, 1], [166, 44, 0], [171, 38, 0], [178, 50, 1]];
+  const M1 = 174, M2 = 44.5;                 // feature means, used for centring
+  const W_VIDEO = [0, 0.2, 0.1], W_BAD = [0, -0.3, -0.2];
+  const RANGE = [[-5, 5], [-2, 2], [-2, 2]];
+  const S_RANGE = [160, 186], I_RANGE = [34, 54];
+  const VIEW0 = { a: 0.35, e: 0.42 };
+
+  const state = { w: [...W_VIDEO], sel: 0, surf: true, all: true, view: { ...VIEW0 } };
+
+  const css = getComputedStyle(document.documentElement);
+  const col = v => css.getPropertyValue(v).trim();
+  const C = { p: col("--p"), lik: col("--lik"), male: col("--male"), female: col("--female"), ink: col("--ink"), muted: col("--muted") };
+
+  const sigmoid = z => 1 / (1 + Math.exp(-z));
+  const zOf = (s, i) => state.w[0] + state.w[1] * (s - M1) + state.w[2] * (i - M2);
+  const pOf = (s, i) => sigmoid(zOf(s, i));
+  const softplus = t => Math.max(t, 0) + Math.log1p(Math.exp(-Math.abs(t)));
+  const nllPoint = (y, z) => y ? softplus(-z) : softplus(z);   // -log p(y|x), numerically stable
+
+  // ---------- world coordinates: floor is [-3, 3]^2, probability 0..1 maps to height 0..HZ ----------
+  const XR = 3, HZ = 3.4;
+  const wx = s => (s - (S_RANGE[0] + S_RANGE[1]) / 2) / (S_RANGE[1] - S_RANGE[0]) * 2 * XR;
+  const wy = i => (i - (I_RANGE[0] + I_RANGE[1]) / 2) / (I_RANGE[1] - I_RANGE[0]) * 2 * XR;
+  const wh = p => p * HZ;
+
+  const cv = document.getElementById("c3d"), ctx = cv.getContext("2d");
+  let W = 0, H = 0, S = 1, CX = 0, CY = 0;
+  function resize() {
+    const dpr = window.devicePixelRatio || 1, r = cv.getBoundingClientRect();
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = r.width; H = r.height; S = Math.min(W, H) / 8.6; CX = W / 2; CY = H * 0.6;
+    render();
+  }
+  function proj(x, y, h) {
+    const { a, e } = state.view;
+    const ca = Math.cos(a), sa = Math.sin(a), ce = Math.cos(e), se = Math.sin(e);
+    const X = x * ca - y * sa, Y = x * sa + y * ca;
+    return { sx: CX + S * X, sy: CY - S * (Y * se + h * ce), d: Y * ce - h * se };
+  }
+  const P3 = (s, i, p) => proj(wx(s), wy(i), wh(p));
+
+  function render3d() {
+    ctx.clearRect(0, 0, W, H);
+    const prims = [];
+    const line = (A, B, stroke, width, dash = null, bias = 0) =>
+      prims.push({ t: "line", A, B, stroke, width, dash, d: (A.d + B.d) / 2 - bias });
+
+    // floor grid
+    for (let s = 160; s <= 185; s += 5) for (let k = 0; k < 8; k++) {
+      const i0 = 34 + 20 * k / 8, i1 = 34 + 20 * (k + 1) / 8;
+      line(P3(s, i0, 0), P3(s, i1, 0), "#d6d6d6", 1, null, -0.01);
+    }
+    for (let i = 35; i <= 54; i += 5) for (let k = 0; k < 8; k++) {
+      const s0 = 160 + 26 * k / 8, s1 = 160 + 26 * (k + 1) / 8;
+      line(P3(s0, i, 0), P3(s1, i, 0), "#d6d6d6", 1, null, -0.01);
+    }
+    // vertical axis at the back corner with 0, 0.5, 1
+    line(P3(160, 54, 0), P3(160, 54, 1), "#999", 1.2, null, -50);
+
+    // surface P(y=1 | x)
+    if (state.surf) {
+      const NS = 26, NI = 20;
+      for (let a = 0; a < NS; a++) for (let b = 0; b < NI; b++) {
+        const s0 = 160 + 26 * a / NS, s1 = 160 + 26 * (a + 1) / NS;
+        const i0 = 34 + 20 * b / NI, i1 = 34 + 20 * (b + 1) / NI;
+        const pts = [[s0, i0], [s1, i0], [s1, i1], [s0, i1]].map(([s, i]) => P3(s, i, pOf(s, i)));
+        prims.push({ t: "poly", pts, fill: "rgba(245,155,60,0.30)", d: pts.reduce((t, p) => t + p.d, 0) / 4 });
+      }
+      for (let s = 160; s <= 186; s += 2) for (let b = 0; b < NI; b++) {
+        const i0 = 34 + 20 * b / NI, i1 = 34 + 20 * (b + 1) / NI;
+        line(P3(s, i0, pOf(s, i0)), P3(s, i1, pOf(s, i1)), "rgba(200,100,0,0.35)", 0.8, null, -0.01);
+      }
+      for (let i = 34; i <= 54; i += 2) for (let a = 0; a < NS; a++) {
+        const s0 = 160 + 26 * a / NS, s1 = 160 + 26 * (a + 1) / NS;
+        line(P3(s0, i, pOf(s0, i)), P3(s1, i, pOf(s1, i)), "rgba(200,100,0,0.35)", 0.8, null, -0.01);
+      }
+    }
+
+    // data points with their columns
+    DATA.forEach(([s, i, y], k) => {
+      const p = pOf(s, i), selected = k === state.sel;
+      const show = state.all || selected;
+      if (show) {
+        const K = 10, alpha = selected ? 1 : 0.45;
+        for (let j = 0; j < K; j++) line(P3(s, i, j / K), P3(s, i, (j + 1) / K), `rgba(120,120,120,${alpha})`, 1.5, [4, 4], 0.02);
+        // green: probability of the observed label
+        const [a, b] = y ? [0, p] : [p, 1];
+        for (let j = 0; j < K; j++) {
+          const t0 = a + (b - a) * j / K, t1 = a + (b - a) * (j + 1) / K;
+          line(P3(s, i, t0), P3(s, i, t1), selected ? "rgba(46,125,50,0.95)" : "rgba(46,125,50,0.45)", selected ? 7 : 4, null, 0.03);
+        }
+        const top = P3(s, i, 1);
+        prims.push({ t: "dot", p: top, r: 3, fill: "#888", d: top.d - 0.05 });
+        const pd = P3(s, i, p);
+        prims.push({ t: "dot", p: pd, r: selected ? 7 : 5, fill: C.p, stroke: "#fff", d: pd.d - 0.1,
+                     label: selected || state.all ? `ŷ = ${p.toFixed(2)}` : null, labelColor: C.p, bold: selected });
+      }
+      const fp = P3(s, i, 0);
+      prims.push({ t: "dot", p: fp, r: selected ? 9 : 7, fill: y ? C.male : C.female, stroke: selected ? C.ink : "#fff",
+                   d: fp.d - 0.1, num: String(k + 1) });
+    });
+
+    prims.sort((A, B) => B.d - A.d);
+    for (const pr of prims) {
+      if (pr.t === "poly") {
+        ctx.beginPath(); pr.pts.forEach((p, j) => j ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy));
+        ctx.closePath(); ctx.fillStyle = pr.fill; ctx.fill();
+      } else if (pr.t === "line") {
+        ctx.beginPath(); ctx.moveTo(pr.A.sx, pr.A.sy); ctx.lineTo(pr.B.sx, pr.B.sy);
+        ctx.strokeStyle = pr.stroke; ctx.lineWidth = pr.width; ctx.lineCap = "round";
+        ctx.setLineDash(pr.dash || []); ctx.stroke(); ctx.setLineDash([]);
+      } else {
+        ctx.beginPath(); ctx.arc(pr.p.sx, pr.p.sy, pr.r, 0, 2 * Math.PI);
+        ctx.fillStyle = pr.fill; ctx.fill();
+        if (pr.stroke) { ctx.lineWidth = 2; ctx.strokeStyle = pr.stroke; ctx.stroke(); }
+        if (pr.num) {
+          ctx.fillStyle = "#fff"; ctx.font = "bold 10px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+          ctx.fillText(pr.num, pr.p.sx, pr.p.sy + 0.5);
+        }
+        if (pr.label) {
+          ctx.font = `${pr.bold ? "bold " : ""}13px system-ui, sans-serif`; ctx.textAlign = "left"; ctx.textBaseline = "middle";
+          const w = ctx.measureText(pr.label).width;
+          ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillRect(pr.p.sx + 9, pr.p.sy - 9, w + 6, 18);
+          ctx.fillStyle = pr.labelColor; ctx.fillText(pr.label, pr.p.sx + 12, pr.p.sy);
+        }
+      }
+    }
+    drawLabels();
+  }
+
+  function txt(s, p, color = C.muted, align = "center", size = 12, italic = false) {
+    ctx.font = `${italic ? "italic " : ""}${size}px ${italic ? "Cambria Math, Times New Roman, serif" : "system-ui, sans-serif"}`;
+    ctx.fillStyle = color; ctx.textAlign = align; ctx.textBaseline = "middle";
+    ctx.fillText(s, p.sx, p.sy);
+  }
+  function drawLabels() {
+    for (let s = 165; s <= 185; s += 5) txt(String(s), P3(s, 31.8, 0));
+    for (let i = 35; i <= 50; i += 5) txt(String(i), P3(187.8, i, 0));
+    txt("stature", P3(173, 29.2, 0), C.ink, "center", 15);
+    txt("interscye", P3(191.5, 44, 0), C.ink, "center", 15);
+    for (const v of [0, 0.5, 1]) {
+      const p = P3(160, 54, v);
+      ctx.beginPath(); ctx.moveTo(p.sx - 4, p.sy); ctx.lineTo(p.sx + 4, p.sy); ctx.strokeStyle = "#999"; ctx.stroke();
+      txt(String(v), { sx: p.sx - 8, sy: p.sy }, C.muted, "right");
+    }
+    const t = P3(160, 54, 1.12);
+    txt("P(y=1 | x)", t, C.p, "center", 15, true);
+  }
+
+  // ---------- panel ----------
+  const f2 = v => (v < 0 ? "−" : "") + Math.abs(v).toFixed(2);
+  const par = v => v < 0 ? `(${f2(v)})` : f2(v);
+
+  function renderPanel() {
+    const [w0, w1, w2] = state.w;
+    document.getElementById("formula").innerHTML =
+      `<i class="pc">ŷ</i> = <i>P</i>(<i>y</i>=1 | <b>x</b>) = <i>σ</i>(<span class="zc">${f2(w0)} + ${par(w1)}·(stature − 174) + ${par(w2)}·(interscye − 44.5)</span>)`;
+
+    let html = "", nll = 0;
+    const liks = [];
+    DATA.forEach(([s, i, y], k) => {
+      const z = zOf(s, i), p = sigmoid(z), l = y ? p : 1 - p;
+      liks.push(l); nll += nllPoint(y, z);
+      html += `<tr data-i="${k}" class="${k === state.sel ? "sel" : ""}"><td>${k + 1}</td><td>${s}</td><td>${i}</td>` +
+        `<td class="${y ? "male" : "female"}">${y}</td><td class="zc">${f2(z)}</td><td class="pc"><b>${p.toFixed(3)}</b></td>` +
+        `<td><div class="bar"><span style="width:${(l * 100).toFixed(1)}%"></span><b>${l.toFixed(3)}</b></div></td></tr>`;
+    });
+    document.getElementById("rows").innerHTML = html;
+
+    const [s, i, y] = DATA[state.sel], k = state.sel + 1;
+    const z = zOf(s, i), p = sigmoid(z), l = y ? p : 1 - p;
+    const L = Math.exp(-nll);
+    document.getElementById("calc").innerHTML =
+      `<div class="head">Selected point ${k}: stature ${s}, interscye ${i}, observed <span class="${y ? "male" : "female"}">y = ${y}</span></div>` +
+      `<i class="zc">z</i><sub>${k}</sub> = ${f2(w0)} + ${par(w1)}·${par(s - M1)} + ${par(w2)}·${par(i - M2)} = <b class="zc">${f2(z)}</b><br>` +
+      `<i class="pc">ŷ</i><sub>${k}</sub> = <i>σ</i>(${f2(z)}) = <b class="pc">${p.toFixed(3)}</b><br>` +
+      `<span class="lc"><i>y</i><sub>${k}</sub> = ${y} ⇒ <i>p</i>(<i>y</i><sub>${k}</sub> | <b>x</b><sub>${k}</sub>) = ` +
+      `${y ? `<i>ŷ</i><sub>${k}</sub>` : `1 − <i>ŷ</i><sub>${k}</sub>`} = <b>${l.toFixed(3)}</b></span>` +
+      `<div class="total"><i>L</i>(<b>w</b>) = ∏ <i>p</i>(<i>y</i><sub><i>i</i></sub> | <b>x</b><sub><i>i</i></sub>) = ` +
+      liks.map((v, j) => j === state.sel ? `<b class="lc">${v.toFixed(3)}</b>` : v.toFixed(3)).join(" · ") +
+      ` = <b class="lc">${L < 1e-4 ? L.toExponential(2) : L.toFixed(4)}</b><br>` +
+      `−log <i>L</i>(<b>w</b>) = <b>${nll.toFixed(3)}</b></div>`;
+
+    for (let j = 0; j < 3; j++) {
+      document.getElementById("s" + j).value = state.w[j];
+      document.getElementById("o" + j).textContent = state.w[j].toFixed(2);
+    }
+    document.getElementById("tSurf").checked = state.surf;
+    document.getElementById("tAll").checked = state.all;
+  }
+
+  function render() { if (!W) return; render3d(); renderPanel(); }
+
+  // ---------- interaction ----------
+  for (let j = 0; j < 3; j++) {
+    document.getElementById("s" + j).addEventListener("input", e => { stopAnim(); state.w[j] = parseFloat(e.target.value); render(); });
+  }
+  document.getElementById("rows").addEventListener("click", e => {
+    const tr = e.target.closest("tr"); if (tr) { state.sel = +tr.dataset.i; render(); }
+  });
+  document.getElementById("tSurf").addEventListener("change", e => { state.surf = e.target.checked; render(); });
+  document.getElementById("tAll").addEventListener("change", e => { state.all = e.target.checked; render(); });
+  document.getElementById("bView").addEventListener("click", () => { state.view = { ...VIEW0 }; render(); });
+
+  const status = document.getElementById("status");
+  let anim = null;
+  function stopAnim() { cancelAnimationFrame(anim); anim = null; }
+  function animateTo(target, ms = 900) {
+    stopAnim();
+    const start = [...state.w], t0 = performance.now();
+    const ease = u => u < 0.5 ? 2 * u * u : 1 - (-2 * u + 2) ** 2 / 2;
+    const step = now => {
+      const u = Math.min(1, (now - t0) / ms), k = ease(u);
+      state.w = start.map((v, j) => v + (target[j] - v) * k);
+      render();
+      if (u < 1) anim = requestAnimationFrame(step);
+    };
+    anim = requestAnimationFrame(step);
+  }
+  document.getElementById("bVideo").addEventListener("click", () => { status.textContent = ""; animateTo(W_VIDEO); });
+  document.getElementById("bBad").addEventListener("click", () => {
+    status.textContent = "Every point gets a low probability for its observed label, so their product is tiny.";
+    animateTo(W_BAD);
+  });
+  document.getElementById("bAscent").addEventListener("click", () => {
+    stopAnim();
+    const lr = 0.02, total = 200;
+    let done = 0;
+    const L0 = Math.exp(-DATA.reduce((t, [s, i, y]) => t + nllPoint(y, zOf(s, i)), 0));
+    const frame = () => {
+      for (let n = 0; n < 2; n++) {
+        // gradient of log L: sum (y - y_hat) * x
+        const g = [0, 0, 0];
+        DATA.forEach(([s, i, y]) => {
+          const r = y - pOf(s, i), f = [1, s - M1, i - M2];
+          for (let j = 0; j < 3; j++) g[j] += r * f[j];
+        });
+        for (let j = 0; j < 3; j++) state.w[j] = Math.max(RANGE[j][0], Math.min(RANGE[j][1], state.w[j] + lr * g[j]));
+        done++;
+      }
+      const L = Math.exp(-DATA.reduce((t, [s, i, y]) => t + nllPoint(y, zOf(s, i)), 0));
+      status.textContent = `gradient ascent step ${done}/${total}: L = ${L0.toFixed(4)} → ${L.toFixed(4)}` +
+        (done >= total ? " (these four points are separable, so L keeps creeping towards 1)" : "");
+      render();
+      if (done < total) anim = requestAnimationFrame(frame);
+    };
+    anim = requestAnimationFrame(frame);
+  });
+
+  // rotate by dragging; a click selects the nearest data point
+  let drag = null;
+  cv.addEventListener("pointerdown", e => {
+    drag = { x: e.clientX, y: e.clientY, moved: false, a: state.view.a, e: state.view.e };
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.hypot(dx, dy) > 4) drag.moved = true;
+    if (drag.moved) {
+      cv.classList.add("dragging");
+      state.view.a = drag.a + dx * 0.01;
+      state.view.e = Math.min(1.45, Math.max(0.08, drag.e + dy * 0.008));
+      render();
+    }
+  });
+  cv.addEventListener("pointerup", e => {
+    if (drag && !drag.moved) {
+      const r = cv.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+      let best = -1, bestD = 30;
+      DATA.forEach(([s, i, y], k) => {
+        // a point can be picked at its floor position or at its y_hat dot
+        for (const h of [0, pOf(s, i)]) {
+          const p = P3(s, i, h), d = Math.hypot(p.sx - mx, p.sy - my);
+          if (d < bestD) { best = k; bestD = d; }
+        }
+      });
+      if (best >= 0) { state.sel = best; render(); }
+    }
+    drag = null; cv.classList.remove("dragging");
+  });
+
+  new ResizeObserver(resize).observe(cv);
+})();
+</script>
+</body>
+</html>
