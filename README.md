@@ -37,6 +37,7 @@ Visualizations for statistical inference and sampling concepts:
 Linear and logistic regression, their loss functions and training:
 
 - [Squared Error Explorer](https://loma-aimotion.github.io/ml_visualizations/linreg_loss_interactive.html) - Drag a regression line and see the squared errors, SSE, MSE and RMSE of linear regression
+- [Gradient Descent Explorer](https://loma-aimotion.github.io/ml_visualizations/linreg_gradient_interactive.html) - From squared errors to the loss landscape: follow each data point's contribution to the gradient and watch gradient descent move across a rotatable 3D loss surface
 - [Logistic Regression 2D Explorer](https://loma-aimotion.github.io/ml_visualizations/logreg_2d_interactive.html) - Rotatable 3D view of the plane w⊤x, its sigmoid surface and class regions; adjust weights or train with gradient descent and watch cross-entropy loss and accuracy
 - [Squared Error vs Likelihood](https://loma-aimotion.github.io/ml_visualizations/logreg_likelihood_interactive.html) - Why logistic regression uses maximum likelihood instead of squared error: compare both losses per data point, along one weight, and under gradient descent
 - [Likelihood Explorer 3D](https://loma-aimotion.github.io/ml_visualizations/likelihood_3d_interactive.html) - How likely is the observed data under the model? Rotatable sigmoid surface with per-point probability bars for the observed labels; maximise the likelihood with gradient ascent
