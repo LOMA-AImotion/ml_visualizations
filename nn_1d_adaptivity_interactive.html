@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Einschicht-Netz 1D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap">
+<style>
+  /* Layout: Plot-Bühne links mit Steuerpult rechts, darunter Verlust-Kurve und Netz-Diagramm nebeneinander. */
+  :root {
+    --bg: #eef1f5;
+    --surface: #ffffff;
+    --ink: #17212d;
+    --muted: #5b6878;
+    --line: #d8dee6;
+    --soft: #f3f5f8;
+    --accent: #2451c4;
+    --accent-ink: #ffffff;
+    --truth: #c0820c;
+    --pos: #2451c4;
+    --neg: #d1435b;
+    --extra: rgba(23, 33, 45, 0.045);
+    --unit-l: 44%;
+    --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", Consolas, "Courier New", monospace;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1319; --surface: #161d26; --ink: #e5ebf2; --muted: #93a1b1; --line: #2a3542;
+      --soft: #1c2530; --accent: #7598ff; --accent-ink: #0e1319; --truth: #e3aa3c;
+      --pos: #7598ff; --neg: #ff7b8f; --extra: rgba(229, 235, 242, 0.04); --unit-l: 66%;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1319; --surface: #161d26; --ink: #e5ebf2; --muted: #93a1b1; --line: #2a3542;
+    --soft: #1c2530; --accent: #7598ff; --accent-ink: #0e1319; --truth: #e3aa3c;
+    --pos: #7598ff; --neg: #ff7b8f; --extra: rgba(229, 235, 242, 0.04); --unit-l: 66%;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  }
+  .wrap {
+    max-width: 1320px; margin: 0 auto;
+    padding-block: 22px 36px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    display: grid; gap: 18px;
+  }
+  header { display: grid; gap: 4px; }
+  h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem, 2.6vw, 2.1rem); margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+  h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.02rem; margin: 0; }
+  .lede { margin: 0; color: var(--muted); max-width: 72ch; }
+  .formula { font-family: var(--math); font-size: 1.25rem; margin: 6px 0 0; }
+  .formula i { font-style: italic; }
+  .grid-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(290px, 340px); gap: 18px; align-items: start; }
+  .grid-bottom { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+  @media (max-width: 960px) { .grid-top, .grid-bottom { grid-template-columns: minmax(0, 1fr); } }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: grid; gap: 10px; min-width: 0; }
+  .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 14px; }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #plot { aspect-ratio: 16 / 10; }
+  #loss { aspect-ratio: 16 / 8; }
+  #net { aspect-ratio: 16 / 8; cursor: crosshair; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.82rem; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .sw { width: 18px; height: 0; border-top: 3px solid var(--accent); display: inline-block; }
+  .sw.truth { border-top: 2px dashed var(--truth); }
+  .sw.units { border-top: 2px solid var(--muted); opacity: 0.55; }
+  .sw.dot { width: 8px; height: 8px; border: 0; border-radius: 50%; background: var(--ink); }
+  .sw.floor { border-top: 2px dotted var(--muted); }
+  .sw.band { width: 14px; height: 10px; border: 1px solid var(--line); background: var(--extra); }
+  .sw.ghost { border-top: 2px dashed var(--accent); opacity: 0.5; }
+  .phase { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; background: var(--soft); border-radius: 8px; padding: 8px 12px; font-size: 0.9rem; }
+  .phase .pill { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; padding: 2px 8px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); }
+  .phase .pill.wait { background: var(--truth); }
+  .phase .m { font-family: var(--math); font-size: 1.05rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .stat { background: var(--soft); border-radius: 8px; padding: 6px 10px; min-width: 0; }
+  .stat .k { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  .stat .v { font-family: var(--font-mono); font-size: 0.98rem; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  @media (max-width: 520px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  .controls { gap: 14px; }
+  .group { display: grid; gap: 6px; }
+  .group + .group { border-top: 1px solid var(--line); padding-top: 12px; }
+  .label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; }
+  .seg { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; background: var(--soft); padding: 4px; border-radius: 8px; }
+  .seg.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .seg button { border: 0; background: transparent; color: var(--ink); padding: 6px 4px; border-radius: 6px; font: inherit; font-size: 0.92rem; cursor: pointer; }
+  .seg button.math { font-family: var(--math); font-size: 1.05rem; }
+  .seg button[aria-pressed="true"] { background: var(--surface); box-shadow: 0 0 0 1px var(--line), 0 1px 2px rgba(0,0,0,0.08); font-weight: 600; color: var(--accent); }
+  .slider { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; }
+  .slider label { font-size: 0.9rem; }
+  .slider output { font-family: var(--font-mono); font-size: 0.88rem; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .slider input { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { font: inherit; font-size: 0.9rem; padding: 7px 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+  .btn:hover { border-color: var(--muted); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; min-width: 8.5em; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; }
+  .check input { accent-color: var(--accent); margin: 0; }
+  .note { font-size: 0.8rem; color: var(--muted); margin: 0; }
+  .warn { font-size: 0.85rem; color: var(--neg); margin: 0; font-weight: 500; }
+  .info { font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); min-height: 1.5em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .experiments { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; max-width: 95ch; }
+  .experiments li { padding-left: 2px; }
+  kbd { font-family: var(--font-mono); font-size: 0.8em; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--soft); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Einschicht-Netz 1D</h1>
+    <p class="lede">Ein neuronales Netz mit einer versteckten Schicht lernt per Gradientenabstieg eine Funktion aus verrauschten Punkten. Datensatz, Rauschen und Anzahl der Units lassen sich während des Trainings ändern. Das Netz trainiert dann vom aktuellen Zustand aus weiter.</p>
+    <p class="formula"><i>ŷ</i>(<i>x</i>) = <i>c</i> + Σ<sub><i>j</i>=1…<i>H</i></sub> <i>v<sub>j</sub></i> · σ(<i>w<sub>j</sub></i> <i>x</i> + <i>b<sub>j</sub></i>) &nbsp;&nbsp; <span style="font-family: var(--font-body); font-size: 0.85rem; color: var(--muted)">Verlust: MSE = (1/<i>N</i>) Σ (<i>ŷ</i>(<i>x<sub>i</sub></i>) − <i>y<sub>i</sub></i>)²</span></p>
+  </header>
+
+  <div class="grid-top">
+    <section class="card" aria-label="Daten und Vorhersage">
+      <div class="card-head">
+        <h2 id="plotTitle">Daten und Netz-Vorhersage</h2>
+        <div class="legend">
+          <span><i class="sw dot"></i>Trainingsdaten</span>
+          <span><i class="sw truth"></i>wahre Funktion</span>
+          <span><i class="sw"></i>Netz ŷ(x)</span>
+          <span><i class="sw units"></i>Beiträge v<sub>j</sub>σ(·)</span>
+          <span id="legGhost" hidden><i class="sw ghost"></i>Modell beim Wechsel</span>
+          <span><i class="sw band"></i>außerhalb der Daten</span>
+        </div>
+      </div>
+      <div class="phase" id="phase" aria-live="polite"></div>
+      <canvas id="plot"></canvas>
+      <div class="stats">
+        <div class="stat"><div class="k">Schritte</div><div class="v" id="sStep">0</div></div>
+        <div class="stat"><div class="k">Trainings-MSE</div><div class="v" id="sTrain">–</div></div>
+        <div class="stat"><div class="k">MSE zu f</div><div class="v" id="sTrue">–</div></div>
+        <div class="stat"><div class="k">Parameter</div><div class="v" id="sParams">–</div></div>
+      </div>
+    </section>
+
+    <aside class="card controls" aria-label="Steuerung">
+      <div class="group">
+        <span class="label">Training</span>
+        <div class="row">
+          <button class="btn primary" id="play" type="button">Pausieren</button>
+          <button class="btn" id="stepBtn" type="button">1 Schritt</button>
+          <button class="btn" id="reinit" type="button">Gewichte neu</button>
+          <button class="btn" id="burst" type="button">+3000 Schritte (schnell)</button>
+        </div>
+        <p class="warn" id="warn" hidden></p>
+      </div>
+
+      <div class="group">
+        <span class="label">Datensatz f(x)</span>
+        <div class="seg" id="fnSeg">
+          <button type="button" class="math" data-fn="abs" aria-pressed="false">|x|</button>
+          <button type="button" class="math" data-fn="sin" aria-pressed="true">sin x</button>
+          <button type="button" class="math" data-fn="cos" aria-pressed="false">cos x</button>
+          <button type="button" class="math" data-fn="cube" aria-pressed="false">x³</button>
+        </div>
+        <p class="note">x ∈ [−3, 3]. x³ wird mit 1/9 skaliert, damit alle Datensätze ähnliche Wertebereiche haben. Ein Wechsel behält die Gewichte: Das angepasste Modell ist der Startpunkt für den Gradientenabstieg auf den neuen Daten.</p>
+        <label class="check"><input type="checkbox" id="pauseOnSwitch" checked> Beim Wechsel anhalten (Startzustand zeigen)</label>
+        <div class="slider">
+          <label for="noise">Rauschen σ</label><output id="noiseOut" for="noise">0.10</output>
+          <input type="range" id="noise" min="0" max="1" step="0.01" value="0.1">
+        </div>
+        <div class="slider">
+          <label for="npts">Anzahl Punkte N</label><output id="nptsOut" for="npts">40</output>
+          <input type="range" id="npts" min="5" max="200" step="1" value="40">
+        </div>
+        <div class="row"><button class="btn" id="resample" type="button">Neue Stichprobe ziehen</button></div>
+      </div>
+
+      <div class="group">
+        <span class="label">Netz</span>
+        <div class="slider">
+          <label for="hidden">Versteckte Units H</label><output id="hiddenOut" for="hidden">6</output>
+          <input type="range" id="hidden" min="1" max="50" step="1" value="6">
+        </div>
+        <div class="seg three" id="actSeg" aria-label="Aktivierungsfunktion">
+          <button type="button" data-act="tanh" aria-pressed="true">tanh</button>
+          <button type="button" data-act="relu" aria-pressed="false">ReLU</button>
+          <button type="button" data-act="sigmoid" aria-pressed="false">Sigmoid</button>
+        </div>
+        <p class="note">Neue Units starten mit v = 0. Die Vorhersage springt also nicht, die Units werden erst durch den Gradienten eingebunden.</p>
+      </div>
+
+      <div class="group">
+        <span class="label">Optimierung</span>
+        <div class="slider">
+          <label for="lr">Lernrate η</label><output id="lrOut" for="lr">0.050</output>
+          <input type="range" id="lr" min="-4" max="0" step="0.05" value="-1.3">
+        </div>
+        <div class="slider">
+          <label for="spf">Schritte pro Bild</label><output id="spfOut" for="spf">10</output>
+          <input type="range" id="spf" min="1" max="200" step="1" value="10">
+        </div>
+        <label class="check"><input type="checkbox" id="momentum"> Momentum (β = 0.9)</label>
+        <label class="check"><input type="checkbox" id="showUnits" checked> Beiträge der Units zeigen</label>
+        <label class="check"><input type="checkbox" id="showTruth" checked> Wahre Funktion zeigen</label>
+        <p class="note">Voller Batch: jeder Schritt nutzt den Gradienten über alle N Punkte. <kbd>Leertaste</kbd> startet und pausiert.</p>
+      </div>
+    </aside>
+  </div>
+
+  <div class="grid-bottom">
+    <section class="card" aria-label="Verlaufskurve">
+      <div class="card-head">
+        <h2>Fehlerverlauf</h2>
+        <div class="legend">
+          <span><i class="sw"></i>Trainings-MSE</span>
+          <span><i class="sw truth"></i>MSE zu f auf [−3, 3]</span>
+          <span><i class="sw floor"></i>σ² (Rauschniveau)</span>
+        </div>
+      </div>
+      <canvas id="loss"></canvas>
+      <label class="check"><input type="checkbox" id="sinceSwitch"> Nur ab dem letzten Datensatzwechsel zeigen</label>
+      <p class="note">Senkrechte Linien markieren Datensatzwechsel. Logarithmische y-Achse. Liegt der Trainings-MSE deutlich unter σ², passt sich das Netz an das Rauschen an (Overfitting). Dann steigt meist der MSE zur wahren Funktion.</p>
+    </section>
+
+    <section class="card" aria-label="Netzstruktur">
+      <div class="card-head">
+        <h2>Netzstruktur</h2>
+        <div class="legend">
+          <span><i class="sw" style="border-color: var(--pos)"></i>positives Gewicht</span>
+          <span><i class="sw" style="border-color: var(--neg)"></i>negatives Gewicht</span>
+        </div>
+      </div>
+      <canvas id="net"></canvas>
+      <div class="info" id="unitInfo">Zeige auf eine versteckte Unit, um ihren Beitrag im Plot hervorzuheben.</div>
+    </section>
+  </div>
+
+  <section class="card" aria-label="Experimente">
+    <h2>Experimente</h2>
+    <ol class="experiments">
+      <li><b>Eine Unit reicht für wenig:</b> H = 1 mit tanh auf sin x. Eine einzelne S-Kurve kann nur eine Stufe erzeugen. Erhöhe H schrittweise und beobachte, wie jede neue Unit einen weiteren Bogen beisteuert.</li>
+      <li><b>|x| mit ReLU:</b> Mit H = 2 und ReLU ist |x| = ReLU(x) + ReLU(−x) exakt darstellbar. Die Dreiecke unten im Plot markieren die Knickstellen −b/w.</li>
+      <li><b>Umlernen von sin x auf cos x:</b> Trainiere auf sin x, bis die Kurve passt (z. B. „+3000 Schritte“). Klicke dann auf cos x. Das Training hält an und zeigt das sin-Modell auf den cos-Daten als Startzustand (gestrichelt). Mit „Training starten“ beginnt der Gradientenabstieg von genau diesem Zustand aus. Das Netz verschiebt seine vorhandenen Units, statt von vorn zu beginnen. Vergleiche, wie schnell das geht, mit „Gewichte neu“ auf cos x.</li>
+      <li><b>Overfitting:</b> σ = 0.4, N = 15, H = 50, Momentum an. Der Trainings-MSE fällt unter σ², die Kurve zappelt durch einzelne Punkte, der MSE zu f steigt.</li>
+      <li><b>Extrapolation:</b> Im grauen Bereich außerhalb von [−3, 3] gibt es keine Daten. tanh und Sigmoid laufen dort konstant aus, ReLU läuft linear weiter.</li>
+    </ol>
+  </section>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Konfiguration ----------
+  const DOM = [-3, 3];          // Bereich der Trainingsdaten
+  const VIEW = [-4.5, 4.5];     // dargestellter x-Bereich (inkl. Extrapolation)
+  const FUNCS = {
+    abs:  { label: "|x|",    f: x => Math.abs(x) },
+    sin:  { label: "sin(x)", f: x => Math.sin(x) },
+    cos:  { label: "cos(x)", f: x => Math.cos(x) },
+    cube: { label: "x³/9",   f: x => x * x * x / 9 },
+  };
+  const ACTS = {
+    tanh:    { f: z => Math.tanh(z), d: (z, h) => 1 - h * h },
+    relu:    { f: z => (z > 0 ? z : 0), d: (z) => (z > 0 ? 1 : 0) },
+    sigmoid: { f: z => 1 / (1 + Math.exp(-z)), d: (z, h) => h * (1 - h) },
+  };
+  const BETA = 0.9;
+  const GRID_N = 200;           // Gitter für "MSE zu f"
+
+  // ---------- Zufall ----------
+  let seed = 12345;
+  function rand() { // mulberry32
+    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  function randn() {
+    let u = 0; while (u === 0) u = rand();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rand());
+  }
+
+  // ---------- Zustand ----------
+  const S = {
+    fn: "sin", noise: 0.1, n: 40, H: 6, act: "tanh",
+    lr: Math.pow(10, -1.3), spf: 10, momentum: false,
+    showUnits: true, showTruth: true, running: true,
+    step: 0, lastLoss: NaN, lastTrue: NaN, hover: -1,
+    pauseOnSwitch: true, sinceSwitch: false, burst: 0,
+    ghost: null,          // Parameter-Schnappschuss beim letzten Datensatzwechsel
+    switches: [],         // {step, from, to}
+    segStart: 0,          // Schritt, ab dem auf dem aktuellen Datensatz trainiert wird
+  };
+  let xs, eps, ys;                       // Daten
+  let w, b, v, c = 0;                    // Parameter
+  let mw, mb, mv, mc = 0;                // Momentum-Puffer
+  let gw, gb, gv, zc, hc;                // Arbeitsspeicher
+  const gridX = new Float64Array(GRID_N);
+  for (let i = 0; i < GRID_N; i++) gridX[i] = DOM[0] + (DOM[1] - DOM[0]) * i / (GRID_N - 1);
+  const hist = { step: [], train: [], truth: [], seg: [], every: 1 };
+
+  // ---------- Daten ----------
+  function sampleData() {
+    xs = new Float64Array(S.n); eps = new Float64Array(S.n);
+    for (let i = 0; i < S.n; i++) {
+      xs[i] = DOM[0] + (DOM[1] - DOM[0]) * rand();
+      eps[i] = randn();
+    }
+    computeTargets();
+  }
+  function resizeData(n) {
+    const oldN = xs.length;
+    const nx = new Float64Array(n), ne = new Float64Array(n);
+    for (let i = 0; i < n; i++) {
+      if (i < oldN) { nx[i] = xs[i]; ne[i] = eps[i]; }
+      else { nx[i] = DOM[0] + (DOM[1] - DOM[0]) * rand(); ne[i] = randn(); }
+    }
+    xs = nx; eps = ne; S.n = n;
+    computeTargets();
+  }
+  function computeTargets() {
+    const f = FUNCS[S.fn].f;
+    ys = new Float64Array(xs.length);
+    for (let i = 0; i < xs.length; i++) ys[i] = f(xs[i]) + S.noise * eps[i];
+  }
+
+  // ---------- Netz ----------
+  function initUnit(j) {
+    // Zentrum -b/w gleichverteilt im Datenbereich, Steigung zufällig
+    const slope = (0.6 + 1.4 * rand()) * (rand() < 0.5 ? -1 : 1);
+    const center = DOM[0] + (DOM[1] - DOM[0]) * rand();
+    w[j] = slope; b[j] = -slope * center;
+    mw[j] = 0; mb[j] = 0; mv[j] = 0;
+  }
+  function allocNet(H) {
+    w = new Float64Array(H); b = new Float64Array(H); v = new Float64Array(H);
+    mw = new Float64Array(H); mb = new Float64Array(H); mv = new Float64Array(H);
+    gw = new Float64Array(H); gb = new Float64Array(H); gv = new Float64Array(H);
+    zc = new Float64Array(H); hc = new Float64Array(H);
+  }
+  function reinitNet() {
+    allocNet(S.H);
+    const scale = 1 / Math.sqrt(S.H);
+    for (let j = 0; j < S.H; j++) { initUnit(j); v[j] = randn() * scale; }
+    c = 0; mc = 0;
+    resetHistory();
+  }
+  function resizeNet(H) {
+    const old = { w, b, v, mw, mb, mv }, oldH = w.length;
+    allocNet(H);
+    for (let j = 0; j < H; j++) {
+      if (j < oldH) {
+        w[j] = old.w[j]; b[j] = old.b[j]; v[j] = old.v[j];
+        mw[j] = old.mw[j]; mb[j] = old.mb[j]; mv[j] = old.mv[j];
+      } else { initUnit(j); v[j] = 0; }
+    }
+    S.H = H;
+    if (S.hover >= H) S.hover = -1;
+  }
+  function predict(x) {
+    const a = ACTS[S.act].f;
+    let y = c;
+    for (let j = 0; j < w.length; j++) y += v[j] * a(w[j] * x + b[j]);
+    return y;
+  }
+  function trueMSE() {
+    const f = FUNCS[S.fn].f;
+    let s = 0;
+    for (let i = 0; i < GRID_N; i++) { const e = predict(gridX[i]) - f(gridX[i]); s += e * e; }
+    return s / GRID_N;
+  }
+
+  // Ein Schritt Gradientenabstieg (voller Batch). Gibt MSE vor dem Update zurück.
+  function trainStep() {
+    const N = xs.length, H = w.length, A = ACTS[S.act];
+    gw.fill(0); gb.fill(0); gv.fill(0);
+    let gc = 0, loss = 0;
+    for (let i = 0; i < N; i++) {
+      const x = xs[i];
+      let pred = c;
+      for (let j = 0; j < H; j++) {
+        const z = w[j] * x + b[j], h = A.f(z);
+        zc[j] = z; hc[j] = h; pred += v[j] * h;
+      }
+      const e = pred - ys[i];
+      loss += e * e;
+      const r = 2 * e / N;           // dL/dŷ_i
+      gc += r;
+      for (let j = 0; j < H; j++) {
+        gv[j] += r * hc[j];
+        const dz = r * v[j] * A.d(zc[j], hc[j]);
+        gw[j] += dz * x; gb[j] += dz;
+      }
+    }
+    const lr = S.lr;
+    if (S.momentum) {
+      for (let j = 0; j < H; j++) {
+        mw[j] = BETA * mw[j] + gw[j]; w[j] -= lr * mw[j];
+        mb[j] = BETA * mb[j] + gb[j]; b[j] -= lr * mb[j];
+        mv[j] = BETA * mv[j] + gv[j]; v[j] -= lr * mv[j];
+      }
+      mc = BETA * mc + gc; c -= lr * mc;
+    } else {
+      for (let j = 0; j < H; j++) { w[j] -= lr * gw[j]; b[j] -= lr * gb[j]; v[j] -= lr * gv[j]; }
+      c -= lr * gc;
+    }
+    S.step++;
+    return loss / N;
+  }
+
+  function currentLoss() {
+    let s = 0;
+    for (let i = 0; i < xs.length; i++) { const e = predict(xs[i]) - ys[i]; s += e * e; }
+    return s / xs.length;
+  }
+
+  function resetHistory() {
+    S.step = 0; hist.every = 1;
+    for (const k of ["step", "train", "truth", "seg"]) hist[k].length = 0;
+    S.ghost = null; S.switches = []; S.segStart = 0; S.burst = 0;
+    S.lastLoss = currentLoss(); S.lastTrue = trueMSE();
+    record();
+  }
+  function record() {
+    hist.step.push(S.step); hist.train.push(S.lastLoss); hist.truth.push(S.lastTrue); hist.seg.push(S.switches.length);
+    if (hist.step.length > 1600) {
+      // ausdünnen, aber Wechselpunkte (erster Eintrag je Segment) behalten
+      const keep = hist.step.map((_, i) => i % 2 === 0 || (i > 0 && hist.seg[i] !== hist.seg[i - 1]));
+      for (const k of ["step", "train", "truth", "seg"]) hist[k] = hist[k].filter((_, i) => keep[i]);
+      hist.every *= 2;
+    }
+  }
+
+  function runSteps(k) {
+    for (let s = 0; s < k; s++) {
+      const L = trainStep();
+      if (!isFinite(L) || L > 1e8 || !isFinite(c)) { diverged(); return; }
+      S.lastLoss = L;
+      if (S.step % hist.every === 0) { S.lastTrue = trueMSE(); record(); }
+    }
+    S.lastLoss = currentLoss();
+    S.lastTrue = trueMSE();
+  }
+  // Datensatzwechsel: Gewichte bleiben, Startzustand wird festgehalten
+  function switchDataset(oldFn) {
+    if (oldFn === S.fn) return;
+    S.ghost = { w: w.slice(), b: b.slice(), v: v.slice(), c, act: S.act, fn: oldFn, step: S.step };
+    S.switches.push({ step: S.step, from: oldFn, to: S.fn });
+    S.segStart = S.step;
+    S.burst = 0;
+    mw.fill(0); mb.fill(0); mv.fill(0); mc = 0;   // Momentum neu starten
+    computeTargets();
+    S.lastLoss = currentLoss(); S.lastTrue = trueMSE();
+    record();                                        // Fehler des alten Modells auf neuen Daten
+    if (S.pauseOnSwitch) setRunning(false);
+    dirty = true;
+  }
+
+  function diverged() {
+    S.burst = 0;
+    setRunning(false);
+    el.warn.hidden = false;
+    el.warn.textContent = "Das Training ist divergiert. Verringere die Lernrate und klicke auf „Gewichte neu“.";
+    reinitNetKeepWarn();
+  }
+  function reinitNetKeepWarn() { reinitNet(); }
+
+  // ---------- Zeichnen: Hilfen ----------
+  function tok(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  let T = {};
+  function readTokens() {
+    T = {
+      surface: tok("--surface"), ink: tok("--ink"), muted: tok("--muted"), line: tok("--line"),
+      accent: tok("--accent"), truth: tok("--truth"), pos: tok("--pos"), neg: tok("--neg"),
+      extra: tok("--extra"), unitL: tok("--unit-l") || "45%",
+      mono: tok("--font-mono"), body: tok("--font-body"),
+    };
+  }
+  function unitColor(j, alpha) { return `hsla(${(j * 137.508 + 200) % 360}, 62%, ${T.unitL}, ${alpha})`; }
+
+  function setupCanvas(cv) {
+    const dpr = window.devicePixelRatio || 1;
+    const W = cv.clientWidth, H = cv.clientHeight;
+    if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+    return { ctx, W, H };
+  }
+  function niceStep(range, target) {
+    const raw = range / target, p = Math.pow(10, Math.floor(Math.log10(raw))), m = raw / p;
+    return (m < 1.5 ? 1 : m < 3 ? 2 : m < 7 ? 5 : 10) * p;
+  }
+  function fmt(x) {
+    if (!isFinite(x)) return "–";
+    if (x === 0) return "0";
+    const a = Math.abs(x);
+    if (a >= 1000 || a < 0.001) return x.toExponential(2).replace("e", "·10^");
+    return x.toPrecision(3);
+  }
+  function fmtTick(x, step) {
+    const d = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+    return x.toFixed(d).replace("-", "−");
+  }
+
+  function yRange() {
+    const f = FUNCS[S.fn].f;
+    let lo = Infinity, hi = -Infinity;
+    for (let i = 0; i < GRID_N; i++) { const y = f(gridX[i]); if (y < lo) lo = y; if (y > hi) hi = y; }
+    const pad = 0.6 + 2.2 * S.noise;
+    return [lo - pad, hi + pad];
+  }
+
+  // ---------- Hauptplot ----------
+  function drawPlot() {
+    const { ctx, W, H } = setupCanvas(el.plot);
+    const m = { l: 40, r: 12, t: 10, b: 28 };
+    const pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const [y0, y1] = yRange();
+    const X = x => m.l + (x - VIEW[0]) / (VIEW[1] - VIEW[0]) * pw;
+    const Y = y => m.t + (1 - (y - y0) / (y1 - y0)) * ph;
+
+    // Extrapolationsbereiche
+    ctx.fillStyle = T.extra;
+    ctx.fillRect(m.l, m.t, X(DOM[0]) - m.l, ph);
+    ctx.fillRect(X(DOM[1]), m.t, m.l + pw - X(DOM[1]), ph);
+
+    // Gitter und Achsen
+    ctx.font = `11px ${T.mono}`; ctx.lineWidth = 1;
+    ctx.strokeStyle = T.line; ctx.fillStyle = T.muted;
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let x = Math.ceil(VIEW[0]); x <= VIEW[1]; x++) {
+      ctx.beginPath(); ctx.moveTo(X(x) + 0.5, m.t); ctx.lineTo(X(x) + 0.5, m.t + ph); ctx.stroke();
+      ctx.fillText(String(x).replace("-", "−"), X(x), m.t + ph + 6);
+    }
+    const ys_ = niceStep(y1 - y0, 6);
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    for (let y = Math.ceil(y0 / ys_) * ys_; y <= y1 + 1e-9; y += ys_) {
+      ctx.beginPath(); ctx.moveTo(m.l, Y(y) + 0.5); ctx.lineTo(m.l + pw, Y(y) + 0.5); ctx.stroke();
+      ctx.fillText(fmtTick(y, ys_), m.l - 6, Y(y));
+    }
+    ctx.strokeStyle = T.muted; ctx.globalAlpha = 0.6;
+    if (y0 < 0 && y1 > 0) { ctx.beginPath(); ctx.moveTo(m.l, Y(0) + 0.5); ctx.lineTo(m.l + pw, Y(0) + 0.5); ctx.stroke(); }
+    ctx.beginPath(); ctx.moveTo(X(0) + 0.5, m.t); ctx.lineTo(X(0) + 0.5, m.t + ph); ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    ctx.save();
+    ctx.beginPath(); ctx.rect(m.l, m.t, pw, ph); ctx.clip();
+
+    const SAMPLES = 360;
+    const xsP = new Float64Array(SAMPLES);
+    for (let k = 0; k < SAMPLES; k++) xsP[k] = VIEW[0] + (VIEW[1] - VIEW[0]) * k / (SAMPLES - 1);
+    const A = ACTS[S.act].f;
+    const clampY = y => Math.max(-1e4, Math.min(1e4, Y(y)));
+    const line = (fn) => {
+      ctx.beginPath();
+      for (let k = 0; k < SAMPLES; k++) {
+        const px = X(xsP[k]), py = clampY(fn(xsP[k]));
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      }
+      ctx.stroke();
+    };
+
+    // Beiträge einzelner Units
+    if (S.showUnits || S.hover >= 0) {
+      for (let j = 0; j < w.length; j++) {
+        const hl = j === S.hover;
+        if (!S.showUnits && !hl) continue;
+        ctx.strokeStyle = unitColor(j, hl ? 1 : (S.hover >= 0 ? 0.18 : 0.5));
+        ctx.lineWidth = hl ? 2.6 : 1.3;
+        line(x => v[j] * A(w[j] * x + b[j]));
+      }
+    }
+
+    // Modell zum Zeitpunkt des letzten Wechsels
+    if (S.ghost) {
+      const g = S.ghost, Ag = ACTS[g.act].f;
+      ctx.strokeStyle = T.accent; ctx.globalAlpha = 0.5; ctx.lineWidth = 2; ctx.setLineDash([3, 4]);
+      line(x => { let y = g.c; for (let j = 0; j < g.w.length; j++) y += g.v[j] * Ag(g.w[j] * x + g.b[j]); return y; });
+      ctx.setLineDash([]); ctx.globalAlpha = 1;
+    }
+
+    // Wahre Funktion
+    if (S.showTruth) {
+      ctx.strokeStyle = T.truth; ctx.lineWidth = 2; ctx.setLineDash([6, 5]);
+      line(FUNCS[S.fn].f);
+      ctx.setLineDash([]);
+    }
+
+    // Daten
+    ctx.fillStyle = T.ink; ctx.strokeStyle = T.surface; ctx.lineWidth = 1.5;
+    const r = xs.length > 120 ? 2.6 : 3.4;
+    for (let i = 0; i < xs.length; i++) {
+      ctx.beginPath(); ctx.arc(X(xs[i]), Y(ys[i]), r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    }
+
+    // Vorhersage
+    ctx.strokeStyle = T.surface; ctx.lineWidth = 6; line(predict);
+    ctx.strokeStyle = T.accent; ctx.lineWidth = 3.2; line(predict);
+
+    ctx.restore();
+
+    // Zentren / Knickstellen -b/w
+    for (let j = 0; j < w.length; j++) {
+      if (Math.abs(w[j]) < 1e-6) continue;
+      const cx = -b[j] / w[j];
+      if (cx < VIEW[0] || cx > VIEW[1]) continue;
+      const px = X(cx), py = m.t + ph;
+      const hl = j === S.hover;
+      ctx.fillStyle = unitColor(j, hl ? 1 : 0.85);
+      const s = hl ? 7 : 5;
+      ctx.beginPath(); ctx.moveTo(px, py - s * 1.3); ctx.lineTo(px - s, py); ctx.lineTo(px + s, py); ctx.closePath(); ctx.fill();
+    }
+
+    // Beschriftung Extrapolation
+    ctx.fillStyle = T.muted; ctx.font = `11px ${T.body}`; ctx.textBaseline = "top"; ctx.textAlign = "center";
+    if (X(DOM[0]) - m.l > 60) {
+      ctx.fillText("keine Daten", (m.l + X(DOM[0])) / 2, m.t + 6);
+      ctx.fillText("keine Daten", (X(DOM[1]) + m.l + pw) / 2, m.t + 6);
+    }
+  }
+
+  // ---------- Verlustkurve ----------
+  function drawLoss() {
+    const { ctx, W, H } = setupCanvas(el.loss);
+    const m = { l: 52, r: 12, t: 10, b: 26 };
+    const pw = W - m.l - m.r, ph = H - m.t - m.b;
+    const n = hist.step.length;
+    const nSeg = S.switches.length;
+    const useSeg = S.sinceSwitch && nSeg > 0;
+    const idx = [];
+    for (let i = 0; i < n; i++) if (!useSeg || hist.seg[i] === nSeg) idx.push(i);
+    const sMin = useSeg ? S.switches[nSeg - 1].step : 0;
+    const floor = S.noise * S.noise;
+    let lo = Infinity, hi = -Infinity;
+    for (const arr of [hist.train, hist.truth]) for (const i of idx) {
+      const x = arr[i];
+      if (x > 0 && isFinite(x)) { lo = Math.min(lo, x); hi = Math.max(hi, x); }
+    }
+    if (floor > 0) { lo = Math.min(lo, floor); hi = Math.max(hi, floor); }
+    if (!isFinite(lo)) { lo = 1e-3; hi = 1; }
+    let d0 = Math.floor(Math.log10(lo)), d1 = Math.ceil(Math.log10(hi));
+    d0 = Math.max(d0, -8);
+    if (d1 - d0 < 1) d1 = d0 + 1;
+    const maxStep = Math.max(sMin + 1, hist.step[n - 1] || 1);
+    const X = s => m.l + (s - sMin) / (maxStep - sMin) * pw;
+    const Y = val => m.t + (1 - (Math.log10(Math.max(val, Math.pow(10, d0))) - d0) / (d1 - d0)) * ph;
+
+    ctx.font = `11px ${T.mono}`; ctx.lineWidth = 1;
+    ctx.strokeStyle = T.line; ctx.fillStyle = T.muted;
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    const dStep = Math.max(1, Math.ceil((d1 - d0) / 6));
+    for (let d = d0; d <= d1; d += dStep) {
+      const py = Y(Math.pow(10, d));
+      ctx.beginPath(); ctx.moveTo(m.l, py + 0.5); ctx.lineTo(m.l + pw, py + 0.5); ctx.stroke();
+      ctx.fillText(d === 0 ? "1" : d === 1 ? "10" : "10^" + String(d).replace("-", "−"), m.l - 6, py);
+    }
+    const xs_ = niceStep(maxStep - sMin, 5);
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    for (let s = Math.ceil(sMin / xs_) * xs_; s <= maxStep + 1e-9; s += xs_) {
+      ctx.beginPath(); ctx.moveTo(X(s) + 0.5, m.t); ctx.lineTo(X(s) + 0.5, m.t + ph); ctx.stroke();
+      ctx.fillText(s >= 10000 ? (s / 1000) + "k" : String(s), X(s), m.t + ph + 6);
+    }
+
+    if (floor > 0) {
+      ctx.strokeStyle = T.muted; ctx.setLineDash([2, 4]); ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.moveTo(m.l, Y(floor)); ctx.lineTo(m.l + pw, Y(floor)); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = T.muted; ctx.textAlign = "right"; ctx.textBaseline = "bottom"; ctx.font = `11px ${T.body}`;
+      ctx.fillText("σ²", m.l + pw - 4, Y(floor) - 2);
+    }
+    // Wechsel-Markierungen
+    ctx.font = `11px ${T.body}`;
+    for (const sw of S.switches) {
+      if (sw.step < sMin || sw.step > maxStep) continue;
+      const px = Math.round(X(sw.step)) + 0.5;
+      ctx.strokeStyle = T.muted; ctx.lineWidth = 1.2; ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.moveTo(px, m.t); ctx.lineTo(px, m.t + ph); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = T.ink; ctx.textBaseline = "top";
+      ctx.textAlign = px > m.l + pw - 80 ? "right" : "left";
+      ctx.fillText(`${FUNCS[sw.from].label} → ${FUNCS[sw.to].label}`, px + (ctx.textAlign === "left" ? 4 : -4), m.t + 2);
+    }
+    const series = (arr, color, width, dash) => {
+      if (idx.length < 1) return;
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(dash);
+      ctx.beginPath();
+      idx.forEach((i, k) => {
+        const px = X(hist.step[i]), py = Y(arr[i]);
+        k ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+      });
+      ctx.stroke(); ctx.setLineDash([]);
+    };
+    series(hist.truth, T.truth, 2, [6, 4]);
+    series(hist.train, T.accent, 2.4, []);
+  }
+
+  // ---------- Netzdiagramm ----------
+  let netGeom = null;
+  function drawNet() {
+    const { ctx, W, H } = setupCanvas(el.net);
+    const Hn = w.length;
+    const xi = W * 0.1, xh = W * 0.5, xo = W * 0.9;
+    const top = 16, bot = H - 16;
+    const gap = Hn > 1 ? (bot - top) / (Hn - 1) : 0;
+    const hy = j => (Hn > 1 ? top + j * gap : (top + bot) / 2);
+    const rH = Math.max(2.5, Math.min(10, (Hn > 1 ? gap : 30) * 0.36));
+    const midY = (top + bot) / 2;
+    netGeom = { xh, hy, Hn, gap };
+
+    let maxW = 1e-9, maxV = 1e-9;
+    for (let j = 0; j < Hn; j++) { maxW = Math.max(maxW, Math.abs(w[j])); maxV = Math.max(maxV, Math.abs(v[j])); }
+    const edge = (x1, y1, x2, y2, val, maxAbs, j) => {
+      const a = Math.abs(val) / maxAbs;
+      const dim = S.hover >= 0 && S.hover !== j;
+      ctx.strokeStyle = val >= 0 ? T.pos : T.neg;
+      ctx.globalAlpha = (0.15 + 0.85 * a) * (dim ? 0.25 : 1);
+      ctx.lineWidth = 0.6 + 3.4 * a;
+      ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    };
+    for (let j = 0; j < Hn; j++) {
+      edge(xi, midY, xh, hy(j), w[j], maxW, j);
+      edge(xh, hy(j), xo, midY, v[j], maxV, j);
+    }
+    ctx.globalAlpha = 1;
+
+    // Knoten
+    const node = (x, y, r, fill, stroke, lw) => {
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fill; ctx.fill();
+      ctx.lineWidth = lw; ctx.strokeStyle = stroke; ctx.stroke();
+    };
+    node(xi, midY, 13, T.surface, T.ink, 1.6);
+    node(xo, midY, 13, T.surface, T.accent, 2.2);
+    for (let j = 0; j < Hn; j++) {
+      const hl = j === S.hover;
+      node(xh, hy(j), hl ? rH + 3 : rH, unitColor(j, 1), hl ? T.ink : T.surface, hl ? 2 : 1);
+    }
+    ctx.fillStyle = T.ink; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `italic 15px Cambria, "Times New Roman", serif`;
+    ctx.fillText("x", xi, midY + 0.5);
+    ctx.fillText("ŷ", xo, midY + 0.5);
+    ctx.font = `11px ${T.body}`; ctx.fillStyle = T.muted; ctx.textBaseline = "top";
+    ctx.fillText("Eingabe", xi, midY + 18);
+    ctx.fillText("Ausgabe", xo, midY + 18);
+    ctx.fillText("+ c = " + fmt(c), xo, midY + 32);
+    ctx.textBaseline = "bottom";
+    ctx.fillText(`${Hn} × ${S.act === "relu" ? "ReLU" : S.act === "tanh" ? "tanh" : "Sigmoid"}`, xh, H - 1);
+  }
+
+  function updateInfo() {
+    const j = S.hover;
+    if (j < 0 || j >= w.length) {
+      el.unitInfo.textContent = "Zeige auf eine versteckte Unit, um ihren Beitrag im Plot hervorzuheben.";
+      return;
+    }
+    const center = Math.abs(w[j]) > 1e-9 ? -b[j] / w[j] : NaN;
+    const what = S.act === "relu" ? "Knick" : "Zentrum";
+    el.unitInfo.textContent = `Unit ${j + 1}: w = ${fmt(w[j])}, b = ${fmt(b[j])}, v = ${fmt(v[j])}, ${what} −b/w = ${fmt(center)}`;
+  }
+
+  function updateStats() {
+    el.sStep.textContent = S.step.toLocaleString("de-DE");
+    el.sTrain.textContent = fmt(S.lastLoss);
+    el.sTrue.textContent = fmt(S.lastTrue);
+    el.sParams.textContent = String(3 * S.H + 1);
+    updatePhase();
+  }
+
+  function updatePhase() {
+    const L = k => `<span class="m">${FUNCS[k].label}</span>`;
+    const since = S.step - S.segStart;
+    let html;
+    if (!S.ghost) {
+      html = `<span class="pill">Phase 1</span> Training auf ${L(S.fn)} ab zufälliger Initialisierung · ${since.toLocaleString("de-DE")} Schritte`;
+    } else if (since === 0) {
+      html = `<span class="pill wait">Startzustand</span> Modell aus ${L(S.ghost.fn)} (nach ${S.ghost.step.toLocaleString("de-DE")} Schritten) auf neuen Daten ${L(S.fn)}. MSE: ${fmt(S.lastLoss)}. „Training starten“ beginnt den Gradientenabstieg von hier.`;
+    } else {
+      html = `<span class="pill">Umlernen</span> ${L(S.ghost.fn)} → ${L(S.fn)} · ${since.toLocaleString("de-DE")} Schritte seit dem Wechsel`;
+    }
+    if (html !== el.phase._html) { el.phase.innerHTML = html; el.phase._html = html; }
+    el.legGhost.hidden = !S.ghost;
+  }
+
+  function drawAll() {
+    readTokens();
+    drawPlot(); drawLoss(); drawNet(); updateStats(); updateInfo();
+  }
+
+  // ---------- UI ----------
+  const $ = id => document.getElementById(id);
+  const el = {
+    plot: $("plot"), loss: $("loss"), net: $("net"), warn: $("warn"), unitInfo: $("unitInfo"),
+    sStep: $("sStep"), sTrain: $("sTrain"), sTrue: $("sTrue"), sParams: $("sParams"),
+    play: $("play"), phase: $("phase"), legGhost: $("legGhost"),
+  };
+  let dirty = true;
+  function setRunning(r) {
+    S.running = r;
+    el.play.textContent = r ? "Pausieren" : "Training starten";
+    if (r) el.warn.hidden = true;
+  }
+  function refreshAfterDataChange() {
+    S.lastLoss = currentLoss(); S.lastTrue = trueMSE(); dirty = true;
+  }
+
+  el.play.addEventListener("click", () => setRunning(!S.running));
+  $("stepBtn").addEventListener("click", () => { setRunning(false); runSteps(1); dirty = true; });
+  $("reinit").addEventListener("click", () => { el.warn.hidden = true; reinitNet(); dirty = true; });
+  $("resample").addEventListener("click", () => { sampleData(); refreshAfterDataChange(); });
+  $("burst").addEventListener("click", () => { el.warn.hidden = true; S.burst += 3000; });
+
+  function bindSeg(segId, attr, key, after) {
+    const seg = $(segId);
+    seg.addEventListener("click", e => {
+      const btn = e.target.closest("button"); if (!btn) return;
+      for (const bb of seg.querySelectorAll("button")) bb.setAttribute("aria-pressed", bb === btn ? "true" : "false");
+      const old = S[key];
+      S[key] = btn.dataset[attr];
+      if (old !== S[key]) after(old);
+    });
+  }
+  bindSeg("fnSeg", "fn", "fn", switchDataset);
+  bindSeg("actSeg", "act", "act", refreshAfterDataChange);
+
+  function bindRange(id, onInput) {
+    const input = $(id), out = $(id + "Out");
+    const handler = () => { out.textContent = onInput(parseFloat(input.value)); dirty = true; };
+    input.addEventListener("input", handler);
+    handler();
+  }
+
+  // Initialisierung
+  sampleData();
+  reinitNet();
+
+  bindRange("noise", val => { S.noise = val; computeTargets(); refreshAfterDataChange(); return val.toFixed(2); });
+  bindRange("npts", val => { if (val !== xs.length) { resizeData(val); refreshAfterDataChange(); } return String(val); });
+  bindRange("hidden", val => { if (val !== w.length) { resizeNet(val); refreshAfterDataChange(); } return String(val); });
+  bindRange("lr", val => { S.lr = Math.pow(10, val); return S.lr < 0.01 ? S.lr.toExponential(1) : S.lr.toFixed(3); });
+  bindRange("spf", val => { S.spf = val; return String(val); });
+  $("momentum").addEventListener("change", e => {
+    S.momentum = e.target.checked;
+    mw.fill(0); mb.fill(0); mv.fill(0); mc = 0;
+  });
+  $("pauseOnSwitch").addEventListener("change", e => { S.pauseOnSwitch = e.target.checked; });
+  $("sinceSwitch").addEventListener("change", e => { S.sinceSwitch = e.target.checked; dirty = true; });
+  $("showUnits").addEventListener("change", e => { S.showUnits = e.target.checked; dirty = true; });
+  $("showTruth").addEventListener("change", e => { S.showTruth = e.target.checked; dirty = true; });
+
+  // Hover im Netzdiagramm
+  function pickUnit(ev) {
+    if (!netGeom) return;
+    const rect = el.net.getBoundingClientRect();
+    const x = ev.clientX - rect.left, y = ev.clientY - rect.top;
+    let best = -1, bestD = Infinity;
+    if (Math.abs(x - netGeom.xh) < rect.width * 0.22) {
+      for (let j = 0; j < netGeom.Hn; j++) {
+        const d = Math.abs(y - netGeom.hy(j));
+        if (d < bestD) { bestD = d; best = j; }
+      }
+      if (bestD > Math.max(14, netGeom.gap)) best = -1;
+    }
+    if (best !== S.hover) { S.hover = best; dirty = true; }
+  }
+  el.net.addEventListener("pointermove", pickUnit);
+  el.net.addEventListener("pointerdown", pickUnit);
+  el.net.addEventListener("pointerleave", () => { if (S.hover !== -1) { S.hover = -1; dirty = true; } });
+
+  document.addEventListener("keydown", e => {
+    if (e.code !== "Space") return;
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLButtonElement || e.target instanceof HTMLSelectElement) return;
+    e.preventDefault(); setRunning(!S.running);
+  });
+
+  const ro = new ResizeObserver(() => { dirty = true; });
+  [el.plot, el.loss, el.net].forEach(cv => ro.observe(cv));
+  try {
+    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { dirty = true; });
+    new MutationObserver(() => { dirty = true; }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  } catch (_) {}
+
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (reduceMotion) setRunning(false);
+
+  function frame() {
+    if (S.burst > 0) {
+      const k = Math.min(300, S.burst);
+      S.burst -= k; runSteps(k); dirty = true;
+    } else if (S.running) { runSteps(S.spf); dirty = true; }
+    if (dirty) { drawAll(); dirty = false; }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

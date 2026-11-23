@@ -1,0 +1,806 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MLP Hidden Layer 2D</title>
+<style>
+  :root {
+    --ink: #111;
+    --muted: #777;
+    --z: #8E24AA;
+    --p: #F57C00;
+    --c0: #1E88E5;
+    --c1: #E53935;
+    --h1: #00897B;
+    --h2: #6D4C41;
+    --panel: #f6f6f6;
+    --math: "Cambria Math", "STIX Two Math", "Latin Modern Math", "Times New Roman", serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #fff; color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 1300px; margin: 0 auto; padding: 16px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 22px 0 4px; }
+  .m { font-family: var(--math); }
+  .m i, .calc i { font-style: italic; }
+  .zc { color: var(--z); }
+  .pc { color: var(--p); }
+  .h1c { color: var(--h1); }
+  .h2c { color: var(--h2); }
+  .formula { font-size: 1.25rem; text-align: center; margin: 4px 0 12px; }
+  .layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+  #c3d { width: 100%; aspect-ratio: 1 / 0.85; display: block; cursor: grab; touch-action: none; }
+  #c3d.dragging { cursor: grabbing; }
+  .hint { color: var(--muted); font-size: 0.88rem; margin: 4px 0 0; }
+  .toggles { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; font-size: 0.95rem; align-items: center; }
+  .toggles label { display: inline-flex; gap: 6px; align-items: center; }
+  svg { width: 100%; height: auto; display: block; }
+  svg text { font-family: system-ui, sans-serif; }
+  #net .node { cursor: pointer; }
+  .seg { display: inline-flex; border: 1px solid #bbb; border-radius: 7px; overflow: hidden; }
+  .seg button { border: 0; border-radius: 0; border-right: 1px solid #bbb; font-family: var(--math); font-style: italic; font-size: 1.05rem; }
+  .seg button:last-child { border-right: 0; }
+  .seg button.on { background: #222; color: #fff; }
+  .calc {
+    background: var(--panel); border-radius: 10px; padding: 10px 14px; margin: 8px 0 0;
+    font-family: var(--math); font-size: 1.08rem; line-height: 1.9; font-variant-numeric: tabular-nums;
+  }
+  .mx {
+    display: inline-grid; gap: 0 10px; padding: 1px 7px; margin: 0 2px; vertical-align: middle;
+    border-left: 2px solid var(--ink); border-right: 2px solid var(--ink); border-radius: 6px;
+    text-align: right; line-height: 1.35;
+  }
+  .verdict { font-family: system-ui, sans-serif; font-size: 0.98rem; font-weight: 600; }
+  .panels { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+  @media (max-width: 1100px) { .panels { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .panels { grid-template-columns: 1fr; } }
+  figure { margin: 0; }
+  figure canvas { width: 100%; aspect-ratio: 1; display: block; }
+  figure canvas.click { cursor: crosshair; }
+  figcaption { font-size: 0.9rem; color: #333; margin-top: 4px; line-height: 1.35; }
+  figcaption b { font-family: var(--math); font-size: 1.05rem; }
+  .controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
+  @media (max-width: 1000px) { .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .controls { grid-template-columns: 1fr; } }
+  .group {
+    display: grid; grid-template-columns: auto 1fr 3.8em; gap: 4px 8px; align-items: center;
+    background: var(--panel); border-radius: 10px; padding: 10px 12px; align-content: start;
+  }
+  .group .title { grid-column: 1 / -1; font-weight: 600; font-size: 0.95rem; margin-bottom: 2px; }
+  .group .name { font-family: var(--math); font-size: 1.12rem; font-style: italic; }
+  .group output { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
+  input[type=range] { width: 100%; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; align-items: center; }
+  button {
+    font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid #bbb;
+    background: #fff; cursor: pointer;
+  }
+  button:hover { background: #eee; }
+  .seg button.on:hover { background: #222; }
+  .stats { display: flex; flex-wrap: wrap; gap: 18px; font-size: 0.95rem; font-variant-numeric: tabular-nums; margin-left: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Multi-layer perceptron: logistic regressions stacked</h1>
+  <div class="formula m">
+    <b class="h1c">h</b> = <i>σ</i>(<b>W</b><b>x</b> + <b>b</b>), &nbsp;
+    <i class="pc">ŷ</i> = <i>σ</i>(<i>v</i><sub>1</sub><i class="h1c">h</i><sub class="h1c">1</sub> + <i>v</i><sub>2</sub><i class="h2c">h</i><sub class="h2c">2</sub> + <i>c</i>)
+    &nbsp;— every neuron is one logistic regression
+  </div>
+
+  <div class="layout">
+    <div>
+      <svg id="net" viewBox="0 0 560 290" aria-label="Network diagram: two inputs, two hidden neurons, one output"></svg>
+      <p class="hint">Edge labels are the weights (dashed = negative), node fill shows the activation for the query point
+        <b class="m">x</b>. Click a neuron to inspect it in 3D.</p>
+      <div class="calc" id="calc"></div>
+    </div>
+
+    <div>
+      <div class="toggles" style="margin: 0 0 6px">
+        <span>Neuron in 3D:</span>
+        <span class="seg" id="sel">
+          <button data-n="0">h₁</button><button data-n="1">h₂</button><button data-n="2">ŷ</button>
+        </span>
+      </div>
+      <canvas id="c3d" aria-label="3D view of the selected neuron's pre-activation and activation over the input plane"></canvas>
+      <div class="toggles">
+        <label><input type="checkbox" id="tPlane"> <span class="zc">pre-activation <i class="m">z</i></span></label>
+        <label><input type="checkbox" id="tSig"> <span id="sigLabel">activation <i class="m">σ</i>(<i class="m">z</i>)</span></label>
+        <label><input type="checkbox" id="tRegions"> regions</label>
+        <button id="bView">Reset view</button>
+      </div>
+      <p class="hint">Drag to rotate, click on the input plane to move <b class="m">x</b>.
+        A hidden neuron is a plane bent by <i class="m">σ</i> — one straight boundary.
+        The output combines two such “steps” and gets a bent boundary.</p>
+    </div>
+  </div>
+
+  <h2>Input space → hidden space → output</h2>
+  <div class="panels">
+    <figure><canvas id="p_h1" class="click"></canvas>
+      <figcaption><b class="h1c">h₁</b> = LogReg 1 over (<i>x</i>₁, <i>x</i>₂): shade = activation, line = <i>h</i>₁ = 0.5</figcaption></figure>
+    <figure><canvas id="p_h2" class="click"></canvas>
+      <figcaption><b class="h2c">h₂</b> = LogReg 2 over (<i>x</i>₁, <i>x</i>₂): shade = activation, line = <i>h</i>₂ = 0.5</figcaption></figure>
+    <figure><canvas id="p_hs"></canvas>
+      <figcaption><b>Hidden space</b> (<i class="h1c">h</i>₁, <i class="h2c">h</i>₂): each point moved to its hidden activations.
+        Here the output is plain logistic regression with a <i>straight</i> boundary.</figcaption></figure>
+    <figure><canvas id="p_out" class="click"></canvas>
+      <figcaption><b class="pc">ŷ</b> back in input space: the straight line from hidden space becomes a bent boundary
+        (dashed: <span class="h1c">h₁</span>, <span class="h2c">h₂</span> boundaries)</figcaption></figure>
+  </div>
+
+  <div class="controls">
+    <div class="group">
+      <div class="title h1c">Hidden neuron h₁</div>
+      <span class="name">w<sub>11</sub></span><input id="s_W00" type="range" min="-6" max="6" step="0.01"><output id="o_W00"></output>
+      <span class="name">w<sub>12</sub></span><input id="s_W01" type="range" min="-6" max="6" step="0.01"><output id="o_W01"></output>
+      <span class="name">b<sub>1</sub></span><input id="s_b0" type="range" min="-8" max="8" step="0.01"><output id="o_b0"></output>
+    </div>
+    <div class="group">
+      <div class="title h2c">Hidden neuron h₂</div>
+      <span class="name">w<sub>21</sub></span><input id="s_W10" type="range" min="-6" max="6" step="0.01"><output id="o_W10"></output>
+      <span class="name">w<sub>22</sub></span><input id="s_W11" type="range" min="-6" max="6" step="0.01"><output id="o_W11"></output>
+      <span class="name">b<sub>2</sub></span><input id="s_b1" type="range" min="-8" max="8" step="0.01"><output id="o_b1"></output>
+    </div>
+    <div class="group">
+      <div class="title pc">Output neuron ŷ</div>
+      <span class="name">v<sub>1</sub></span><input id="s_v0" type="range" min="-10" max="10" step="0.01"><output id="o_v0"></output>
+      <span class="name">v<sub>2</sub></span><input id="s_v1" type="range" min="-10" max="10" step="0.01"><output id="o_v1"></output>
+      <span class="name">c</span><input id="s_c" type="range" min="-10" max="10" step="0.01"><output id="o_c"></output>
+    </div>
+    <div class="group">
+      <div class="title">Query point x</div>
+      <span class="name">x<sub>1</sub></span><input id="s_x1" type="range" min="-3" max="3" step="0.01"><output id="o_x1"></output>
+      <span class="name">x<sub>2</sub></span><input id="s_x2" type="range" min="-3" max="3" step="0.01"><output id="o_x2"></output>
+    </div>
+  </div>
+  <div class="buttons">
+    <button id="bTrain">Train (backprop + gradient descent)</button>
+    <button id="bBoard">Blackboard weights</button>
+    <button id="bRandom">Random init</button>
+    <div class="stats">
+      <span>cross-entropy loss: <b id="loss"></b></span>
+      <span>accuracy: <b id="acc"></b></span>
+      <span id="step"></span>
+    </div>
+  </div>
+</main>
+
+<script>
+(() => {
+  // ---------- Data: class 1 sits in a wedge cut out by two lines ----------
+  // wedge = {3x1 − x2 + 1 > 0} ∩ {4x1 + 2x2 − 4 < 0}, i.e. "h1 on AND h2 off"
+  function rng(seed) {
+    return () => {
+      seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const DATA = [];
+  {
+    const R = rng(11);
+    let n0 = 0, n1 = 0;
+    while (n0 < 34 || n1 < 24) {
+      const x = -2.8 + 5.6 * R(), y = -2.8 + 5.6 * R();
+      const d1 = (3 * x - y + 1) / Math.sqrt(10), d2 = (4 * x + 2 * y - 4) / Math.sqrt(20);
+      const inside = d1 > 0 && d2 < 0;
+      const margin = inside ? Math.min(d1, -d2) : Math.max(-d1, d2);
+      if (margin < 0.22) continue;
+      if (inside && n1 < 24) { DATA.push([x, y, 1]); n1++; }
+      else if (!inside && n0 < 34) { DATA.push([x, y, 0]); n0++; }
+    }
+  }
+
+  // Blackboard: W = [[3, −1], [4, 2]], output "h1 − h2" (scaled by 6, bias added so it is a real classifier)
+  const BOARD = { W: [[3, -1], [4, 2]], b: [1, -4], v: [6, -6], c: -3 };
+  const clone = p => ({ W: p.W.map(r => [...r]), b: [...p.b], v: [...p.v], c: p.c });
+  let P = clone(BOARD);
+
+  const state = {
+    sel: 0, q: [1, -1.5],
+    plane: false, sig: true, regions: true,
+    view: { a: 0.55, e: 0.38 }, steps: 0,
+  };
+
+  const XR = 3, ZMAX = 6, HS = XR / ZMAX;
+  const css = getComputedStyle(document.documentElement);
+  const col = v => css.getPropertyValue(v).trim();
+  const C = {
+    z: col("--z"), p: col("--p"), c0: col("--c0"), c1: col("--c1"), h1: col("--h1"), h2: col("--h2"),
+    ink: col("--ink"), muted: col("--muted"),
+  };
+  const NCOL = [C.h1, C.h2, C.p];
+  const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+  const rgba = (h, a) => `rgba(${hex(h).join(",")},${a})`;
+  const RGB = { h1: hex(C.h1), h2: hex(C.h2), c0: hex(C.c0), c1: hex(C.c1) };
+
+  const sigmoid = z => 1 / (1 + Math.exp(-z));
+  function fwd(x1, x2) {
+    const z1 = P.W[0][0] * x1 + P.W[0][1] * x2 + P.b[0];
+    const z2 = P.W[1][0] * x1 + P.W[1][1] * x2 + P.b[1];
+    const h1 = sigmoid(z1), h2 = sigmoid(z2);
+    const zo = P.v[0] * h1 + P.v[1] * h2 + P.c;
+    return { z: [z1, z2], h: [h1, h2], zo, y: sigmoid(zo) };
+  }
+  const zN = (n, x1, x2) => { const r = fwd(x1, x2); return n < 2 ? r.z[n] : r.zo; };
+  const hZ = z => z * HS;
+  const hP = p => (2 * p - 1) * XR;
+
+  // ---------- geometry helpers ----------
+  function clipPoly(poly, f) {
+    const out = [];
+    for (let i = 0; i < poly.length; i++) {
+      const A = poly[i], B = poly[(i + 1) % poly.length];
+      const fa = f(A[0], A[1]), fb = f(B[0], B[1]);
+      if (fa >= 0) out.push(A);
+      if ((fa >= 0) !== (fb >= 0)) {
+        const t = fa / (fa - fb);
+        out.push([A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])]);
+      }
+    }
+    return out;
+  }
+  function clipSeg(A, B, fs) {
+    let t0 = 0, t1 = 1;
+    for (const f of fs) {
+      const fa = f(A[0], A[1]), fb = f(B[0], B[1]);
+      if (fa < 0 && fb < 0) return null;
+      if (fa < 0) t0 = Math.max(t0, fa / (fa - fb));
+      else if (fb < 0) t1 = Math.min(t1, fa / (fa - fb));
+    }
+    if (t0 >= t1) return null;
+    const Pt = t => [A[0] + t * (B[0] - A[0]), A[1] + t * (B[1] - A[1])];
+    return [Pt(t0), Pt(t1)];
+  }
+  // segment of a·u + b·v + c = 0 inside [lo, hi]²
+  function lineInBox(a, b, c, lo, hi) {
+    const nn = a * a + b * b;
+    if (nn < 1e-12) return null;
+    const p0 = [-c * a / nn, -c * b / nn], s = Math.sqrt(nn), d = [-b / s, a / s], L = 1000;
+    const box = [(u) => u - lo, (u) => hi - u, (u, v) => v - lo, (u, v) => hi - v];
+    return clipSeg([p0[0] - L * d[0], p0[1] - L * d[1]], [p0[0] + L * d[0], p0[1] + L * d[1]], box);
+  }
+  // zero-level contour of f over [lo, hi]² (marching squares)
+  function contour(f, lo, hi, n) {
+    const st = (hi - lo) / n, V = [];
+    for (let i = 0; i <= n; i++) { V.push([]); for (let j = 0; j <= n; j++) V[i].push(f(lo + i * st, lo + j * st)); }
+    const segs = [];
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const cs = [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]], pts = [];
+      for (let k = 0; k < 4; k++) {
+        const [ai, aj] = cs[k], [bi, bj] = cs[(k + 1) % 4], fa = V[ai][aj], fb = V[bi][bj];
+        if ((fa >= 0) !== (fb >= 0)) {
+          const t = fa / (fa - fb);
+          pts.push([lo + (ai + t * (bi - ai)) * st, lo + (aj + t * (bj - aj)) * st]);
+        }
+      }
+      if (pts.length >= 2) segs.push([pts[0], pts[1]]);
+      if (pts.length === 4) segs.push([pts[2], pts[3]]);
+    }
+    return segs;
+  }
+  const hiddenLine = (n, lo = -XR, hi = XR) => lineInBox(P.W[n][0], P.W[n][1], P.b[n], lo, hi);
+
+  // ---------- 3D view ----------
+  const cv = document.getElementById("c3d");
+  const ctx = cv.getContext("2d");
+  let W3 = 0, H3 = 0, S = 1, CX = 0, CY = 0;
+
+  function proj(x, y, h) {
+    const { a, e } = state.view;
+    const ca = Math.cos(a), sa = Math.sin(a), ce = Math.cos(e), se = Math.sin(e);
+    const X = x * ca - y * sa, Y = x * sa + y * ca;
+    return { sx: CX + S * X, sy: CY - S * (Y * se + h * ce), d: Y * ce - h * se };
+  }
+  function unprojectFloor(sx, sy) {
+    const { a, e } = state.view;
+    const X = (sx - CX) / S, Y = (CY - sy) / S / Math.sin(e);
+    return [X * Math.cos(a) + Y * Math.sin(a), -X * Math.sin(a) + Y * Math.cos(a)];
+  }
+
+  function render3d() {
+    ctx.clearRect(0, 0, W3, H3);
+    const n = state.sel, nc = NCOL[n];
+    const f = (a, b) => zN(n, a, b), g = (a, b) => sigmoid(f(a, b));
+    const prims = [];
+    const addPoly = (pts2, hf, fill) => {
+      if (pts2.length < 3) return;
+      const pts = pts2.map(([x, y]) => proj(x, y, hf(x, y)));
+      prims.push({ t: "poly", pts, fill, d: pts.reduce((s, p) => s + p.d, 0) / pts.length });
+    };
+    const addLine = (A, B, ha, hb, stroke, width, dash, bias = 0) => {
+      const pa = proj(A[0], A[1], ha), pb = proj(B[0], B[1], hb);
+      prims.push({ t: "line", pa, pb, stroke, width, dash, d: (pa.d + pb.d) / 2 - bias });
+    };
+
+    const corners = [[-XR, -XR], [XR, -XR], [XR, XR], [-XR, XR]];
+    for (let i = 0; i < 4; i++) {
+      const A = corners[i], B = corners[(i + 1) % 4];
+      for (const h of [-XR, XR]) addLine(A, B, h, h, "#d0d0d0", 1, null, -100);
+      addLine(A, A, -XR, XR, "#d0d0d0", 1, null, -100);
+    }
+
+    // Input plane, tinted by the selected neuron's "on" region
+    const NF = 24, cf = 2 * XR / NF;
+    const onFill = n < 2 ? rgba(nc, 0.16) : "rgba(229,57,53,0.11)";
+    const offFill = n < 2 ? "rgba(0,0,0,0.025)" : "rgba(30,136,229,0.11)";
+    for (let i = 0; i < NF; i++) for (let j = 0; j < NF; j++) {
+      const x = -XR + i * cf, y = -XR + j * cf;
+      const sq = [[x, y], [x + cf, y], [x + cf, y + cf], [x, y + cf]];
+      if (state.regions) {
+        addPoly(clipPoly(sq, f), () => 0, onFill);
+        addPoly(clipPoly(sq, (a, b) => -f(a, b)), () => 0, offFill);
+      } else addPoly(sq, () => 0, "rgba(0,0,0,0.03)");
+    }
+    const NG = 12, cg = 2 * XR / NG;
+    for (let k = -XR; k <= XR; k++) for (let i = 0; i < NG; i++) {
+      const t = -XR + i * cg;
+      addLine([k, t], [k, t + cg], 0, 0, "#cfcfcf", 1, null, -0.01);
+      addLine([t, k], [t + cg, k], 0, 0, "#cfcfcf", 1, null, -0.01);
+    }
+
+    // Boundaries on the input plane
+    const addFloorSeg = (seg, color, width, pieces = 10) => {
+      if (!seg) return;
+      for (let i = 0; i < pieces; i++) {
+        const a = i / pieces, b = (i + 1) / pieces;
+        const A = [seg[0][0] + a * (seg[1][0] - seg[0][0]), seg[0][1] + a * (seg[1][1] - seg[0][1])];
+        const B = [seg[0][0] + b * (seg[1][0] - seg[0][0]), seg[0][1] + b * (seg[1][1] - seg[0][1])];
+        addLine(A, B, 0, 0, color, width, null, -0.02);
+      }
+    };
+    if (n < 2) addFloorSeg(hiddenLine(n), C.ink, 2.5);
+    else {
+      addFloorSeg(hiddenLine(0), rgba(C.h1, 0.8), 1.5);
+      addFloorSeg(hiddenLine(1), rgba(C.h2, 0.8), 1.5);
+      for (const s of contour(f, -XR, XR, 48)) addLine(s[0], s[1], 0, 0, C.ink, 2.5, null, -0.03);
+    }
+
+    // Pre-activation z (a plane for hidden neurons, curved for the output)
+    if (state.plane) {
+      const NZ = n < 2 ? 12 : 20, cz = 2 * XR / NZ;
+      const slab = [(x, y) => ZMAX - f(x, y), (x, y) => f(x, y) + ZMAX];
+      for (let i = 0; i < NZ; i++) for (let j = 0; j < NZ; j++) {
+        const x = -XR + i * cz, y = -XR + j * cz;
+        let poly = [[x, y], [x + cz, y], [x + cz, y + cz], [x, y + cz]];
+        for (const s of slab) poly = clipPoly(poly, s);
+        addPoly(poly, (a, b) => hZ(Math.max(-ZMAX, Math.min(ZMAX, f(a, b)))), "rgba(142,36,170,0.26)");
+      }
+      for (let k = -XR; k <= XR; k++) for (let i = 0; i < NZ; i++) {
+        const t = -XR + i * cz;
+        for (const [A, B] of [[[k, t], [k, t + cz]], [[t, k], [t + cz, k]]]) {
+          const s = clipSeg(A, B, slab);
+          if (s) addLine(s[0], s[1], hZ(f(...s[0])), hZ(f(...s[1])), "rgba(142,36,170,0.55)", 1, null, -0.01);
+        }
+      }
+    }
+
+    // Activation surface σ(z)
+    if (state.sig) {
+      const M = 24, c2 = 2 * XR / M, fill = rgba(nc, 0.30), line = rgba(nc, 0.6);
+      for (let i = 0; i < M; i++) for (let j = 0; j < M; j++) {
+        const x = -XR + i * c2, y = -XR + j * c2;
+        addPoly([[x, y], [x + c2, y], [x + c2, y + c2], [x, y + c2]], (a, b) => hP(g(a, b)), fill);
+      }
+      for (let k = -XR; k <= XR; k++) for (let i = 0; i < M; i++) {
+        const t = -XR + i * c2;
+        for (const [A, B] of [[[k, t], [k, t + c2]], [[t, k], [t + c2, k]]])
+          addLine(A, B, hP(g(...A)), hP(g(...B)), line, 1, null, -0.01);
+      }
+    }
+
+    DATA.forEach(([x, y, c]) => {
+      const p = proj(x, y, 0);
+      prims.push({ t: "dot", p, r: 5, fill: c ? C.c1 : C.c0, stroke: "#fff", d: p.d - 0.05 });
+    });
+
+    // Query point stems
+    const [qx, qy] = state.q, zq = f(qx, qy), pq = sigmoid(zq);
+    const hz = hZ(Math.max(-ZMAX, Math.min(ZMAX, zq))), K = 8;
+    if (state.plane) {
+      for (let i = 0; i < K; i++) addLine([qx, qy], [qx, qy], hz * i / K, hz * (i + 1) / K, C.z, 2.5, [5, 4], 0.05);
+      if (Math.abs(zq) <= ZMAX) {
+        const pz = proj(qx, qy, hz);
+        prims.push({ t: "dot", p: pz, r: 6.5, fill: C.z, stroke: "#fff", d: pz.d - 0.1 });
+      }
+    }
+    if (state.sig) {
+      const hp = hP(pq);
+      for (let i = 0; i < K; i++) addLine([qx, qy], [qx, qy], hp * i / K, hp * (i + 1) / K, nc, 2, [2, 4], 0.04);
+      const pp = proj(qx, qy, hp);
+      prims.push({ t: "dot", p: pp, r: 6.5, fill: nc, stroke: "#fff", d: pp.d - 0.1 });
+    }
+    const pf = proj(qx, qy, 0);
+    prims.push({ t: "ring", p: pf, r: 8, stroke: C.ink, d: pf.d - 0.1 });
+
+    prims.sort((A, B) => B.d - A.d);
+    for (const pr of prims) {
+      if (pr.t === "poly") {
+        ctx.beginPath();
+        pr.pts.forEach((p, i) => i ? ctx.lineTo(p.sx, p.sy) : ctx.moveTo(p.sx, p.sy));
+        ctx.closePath(); ctx.fillStyle = pr.fill; ctx.fill();
+      } else if (pr.t === "line") {
+        ctx.beginPath(); ctx.moveTo(pr.pa.sx, pr.pa.sy); ctx.lineTo(pr.pb.sx, pr.pb.sy);
+        ctx.strokeStyle = pr.stroke; ctx.lineWidth = pr.width; ctx.setLineDash(pr.dash || []);
+        ctx.stroke(); ctx.setLineDash([]);
+      } else if (pr.t === "dot") {
+        ctx.beginPath(); ctx.arc(pr.p.sx, pr.p.sy, pr.r, 0, 2 * Math.PI);
+        ctx.fillStyle = pr.fill; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = pr.stroke; ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.arc(pr.p.sx, pr.p.sy, pr.r, 0, 2 * Math.PI);
+        ctx.lineWidth = 2; ctx.strokeStyle = pr.stroke; ctx.stroke();
+      }
+    }
+    drawAxes3d(n);
+  }
+
+  function label(c, text, x, y, color, align = "center", size = 13, italic = false) {
+    c.font = `${italic ? "italic " : ""}${size}px ${italic ? "Cambria Math, Times New Roman, serif" : "system-ui, sans-serif"}`;
+    c.fillStyle = color; c.textAlign = align; c.textBaseline = "middle";
+    c.fillText(text, x, y);
+  }
+
+  function drawAxes3d(n) {
+    const corners = [[-XR, -XR], [XR, -XR], [XR, XR], [-XR, XR]].map(c => ({ c, p: proj(c[0], c[1], 0) }));
+    corners.sort((A, B) => A.p.sx - B.p.sx);
+    const left = corners[0].c, right = corners[3].c;
+    if (state.plane) {
+      for (const z of [-6, -3, 0, 3, 6]) {
+        const p = proj(left[0], left[1], hZ(z));
+        ctx.beginPath(); ctx.moveTo(p.sx - 4, p.sy); ctx.lineTo(p.sx + 4, p.sy);
+        ctx.strokeStyle = C.z; ctx.lineWidth = 1.5; ctx.stroke();
+        label(ctx, String(z), p.sx - 8, p.sy, C.z, "right", 12);
+      }
+      const lt = proj(left[0], left[1], XR);
+      label(ctx, ["z₁", "z₂", "z"][n], lt.sx - 4, lt.sy - 16, C.z, "center", 17, true);
+    }
+    if (state.sig) {
+      for (const pv of [0, 0.5, 1]) {
+        const p = proj(right[0], right[1], hP(pv));
+        ctx.beginPath(); ctx.moveTo(p.sx - 4, p.sy); ctx.lineTo(p.sx + 4, p.sy);
+        ctx.strokeStyle = NCOL[n]; ctx.lineWidth = 1.5; ctx.stroke();
+        label(ctx, String(pv), p.sx + 8, p.sy, NCOL[n], "left", 12);
+      }
+      const rt = proj(right[0], right[1], XR);
+      label(ctx, ["h₁ = σ(z₁)", "h₂ = σ(z₂)", "ŷ = σ(z)"][n], rt.sx + 4, rt.sy - 16, NCOL[n], "center", 17, true);
+    }
+    const front = corners.slice().sort((A, B) => B.p.sy - A.p.sy)[0].c;
+    const mx = proj(0, front[1], 0), my = proj(front[0], 0, 0), o = proj(0, 0, 0);
+    const off = p => [p.sx + (p.sx - o.sx) * 0.12, p.sy + (p.sy - o.sy) * 0.12 + 10];
+    const [ax, ay] = off(mx), [bx, by] = off(my);
+    label(ctx, "x₁", ax, ay, C.ink, "center", 17, true);
+    label(ctx, "x₂", bx, by, C.ink, "center", 17, true);
+  }
+
+  // ---------- 2D panels ----------
+  const PANELS = [
+    { id: "p_h1", kind: "in", n: 0 }, { id: "p_h2", kind: "in", n: 1 },
+    { id: "p_hs", kind: "hid" }, { id: "p_out", kind: "in", n: 2 },
+  ].map(p => ({ ...p, cv: document.getElementById(p.id), w: 0, h: 0 }));
+  PANELS.forEach(p => { p.ctx = p.cv.getContext("2d"); });
+  const RES = 90, off = document.createElement("canvas");
+  off.width = off.height = RES;
+  const offCtx = off.getContext("2d"), img = offCtx.createImageData(RES, RES);
+  const MG = { l: 34, r: 10, t: 10, b: 32 };
+
+  const mix = (rgb, t) => rgb.map(c => Math.round(255 + (c - 255) * t));
+  const diverge = y => y >= 0.5 ? mix(RGB.c1, (y - 0.5) * 2 * 0.5) : mix(RGB.c0, (0.5 - y) * 2 * 0.5);
+
+  function frame(p) {
+    const [lo, hi] = p.kind === "hid" ? [-0.1, 1.1] : [-XR, XR];
+    const X = u => MG.l + (u - lo) / (hi - lo) * (p.w - MG.l - MG.r);
+    const Y = v => p.h - MG.b - (v - lo) / (hi - lo) * (p.h - MG.t - MG.b);
+    return { lo, hi, X, Y };
+  }
+
+  function drawPanel(p) {
+    if (!p.w) return;
+    const c = p.ctx, { lo, hi, X, Y } = frame(p);
+    c.clearRect(0, 0, p.w, p.h);
+
+    // heatmap
+    for (let j = 0; j < RES; j++) for (let i = 0; i < RES; i++) {
+      const u = lo + (i + 0.5) / RES * (hi - lo), v = hi - (j + 0.5) / RES * (hi - lo);
+      let rgb;
+      if (p.kind === "hid") rgb = diverge(sigmoid(P.v[0] * u + P.v[1] * v + P.c));
+      else if (p.n < 2) rgb = mix(p.n ? RGB.h2 : RGB.h1, 0.55 * sigmoid(zN(p.n, u, v)));
+      else rgb = diverge(fwd(u, v).y);
+      const k = 4 * (j * RES + i);
+      img.data[k] = rgb[0]; img.data[k + 1] = rgb[1]; img.data[k + 2] = rgb[2]; img.data[k + 3] = 255;
+    }
+    offCtx.putImageData(img, 0, 0);
+    c.imageSmoothingEnabled = true;
+    c.drawImage(off, X(lo), Y(hi), X(hi) - X(lo), Y(lo) - Y(hi));
+
+    // grid + ticks
+    const ticks = p.kind === "hid" ? [0, 0.5, 1] : [-3, -2, -1, 0, 1, 2, 3];
+    c.lineWidth = 1;
+    for (const t of ticks) {
+      c.strokeStyle = "rgba(0,0,0,0.08)";
+      c.beginPath(); c.moveTo(X(t), Y(lo)); c.lineTo(X(t), Y(hi)); c.stroke();
+      c.beginPath(); c.moveTo(X(lo), Y(t)); c.lineTo(X(hi), Y(t)); c.stroke();
+      if (p.kind === "hid" || t % 3 === 0) {
+        label(c, String(t), X(t), Y(lo) + 10, C.muted, "center", 11);
+        label(c, String(t), X(lo) - 5, Y(t), C.muted, "right", 11);
+      }
+    }
+    c.strokeStyle = "#bbb"; c.strokeRect(X(lo), Y(hi), X(hi) - X(lo), Y(lo) - Y(hi));
+
+    // boundaries
+    const seg = (s, color, width, dash) => {
+      if (!s) return;
+      c.beginPath(); c.moveTo(X(s[0][0]), Y(s[0][1])); c.lineTo(X(s[1][0]), Y(s[1][1]));
+      c.strokeStyle = color; c.lineWidth = width; c.setLineDash(dash || []); c.stroke(); c.setLineDash([]);
+    };
+    if (p.kind === "hid") seg(lineInBox(P.v[0], P.v[1], P.c, lo, hi), C.ink, 2.5);
+    else if (p.n < 2) seg(hiddenLine(p.n), C.ink, 2.5);
+    else {
+      seg(hiddenLine(0), C.h1, 1.8, [6, 4]);
+      seg(hiddenLine(1), C.h2, 1.8, [6, 4]);
+      c.beginPath();
+      for (const s of contour((a, b) => fwd(a, b).zo, -XR, XR, 72)) {
+        c.moveTo(X(s[0][0]), Y(s[0][1])); c.lineTo(X(s[1][0]), Y(s[1][1]));
+      }
+      c.strokeStyle = C.ink; c.lineWidth = 2.5; c.lineCap = "round"; c.stroke(); c.lineCap = "butt";
+    }
+
+    // data points
+    c.save();
+    c.beginPath(); c.rect(X(lo), Y(hi), X(hi) - X(lo), Y(lo) - Y(hi)); c.clip();
+    DATA.forEach(([x, y, cl]) => {
+      const [u, v] = p.kind === "hid" ? fwd(x, y).h : [x, y];
+      c.beginPath(); c.arc(X(u), Y(v), 4.2, 0, 2 * Math.PI);
+      c.fillStyle = cl ? C.c1 : C.c0; c.globalAlpha = 0.9; c.fill(); c.globalAlpha = 1;
+      c.lineWidth = 1.2; c.strokeStyle = "#fff"; c.stroke();
+    });
+    const [qu, qv] = p.kind === "hid" ? fwd(...state.q).h : state.q;
+    c.beginPath(); c.arc(X(qu), Y(qv), 7.5, 0, 2 * Math.PI);
+    c.lineWidth = 2.2; c.strokeStyle = C.ink; c.stroke();
+    c.restore();
+
+    // axis labels
+    if (p.kind === "hid") {
+      label(c, "h₁", X(hi) - 6, Y(lo) + 22, C.h1, "right", 16, true);
+      label(c, "h₂", X(lo) - 22, Y(hi) + 8, C.h2, "center", 16, true);
+    } else {
+      label(c, "x₁", X(hi) - 6, Y(lo) + 22, C.ink, "right", 16, true);
+      label(c, "x₂", X(lo) - 22, Y(hi) + 8, C.ink, "center", 16, true);
+    }
+  }
+
+  PANELS.filter(p => p.kind === "in").forEach(p => {
+    p.cv.addEventListener("click", e => {
+      const r = p.cv.getBoundingClientRect(), { lo, hi } = frame(p);
+      const u = lo + (e.clientX - r.left - MG.l) / (p.w - MG.l - MG.r) * (hi - lo);
+      const v = lo + (p.h - MG.b - (e.clientY - r.top)) / (p.h - MG.t - MG.b) * (hi - lo);
+      if (Math.abs(u) <= XR && Math.abs(v) <= XR) { state.q = [u, v]; render(); }
+    });
+  });
+
+  // ---------- Network diagram ----------
+  const net = document.getElementById("net");
+  const NODES = [
+    { name: "x₁", x: 80, y: 80 }, { name: "x₂", x: 80, y: 205 },
+    { name: "h₁", x: 290, y: 80, n: 0 }, { name: "h₂", x: 290, y: 205, n: 1 },
+    { name: "ŷ", x: 480, y: 142, n: 2 },
+  ];
+  const RN = 28;
+
+  function f2(v) { return (v < 0 ? "−" : "") + Math.abs(v).toFixed(2); }
+  function par(v) { return v < 0 ? `(${f2(v)})` : f2(v); }
+
+  function renderNet() {
+    const r = fwd(...state.q), act = [null, null, r.h[0], r.h[1], r.y];
+    let s = "";
+    const edge = (A, B, w, t, dy, dx = 0) => {
+      const ang = Math.atan2(B.y - A.y, B.x - A.x);
+      const x1 = A.x + RN * Math.cos(ang), y1 = A.y + RN * Math.sin(ang);
+      const x2 = B.x - RN * Math.cos(ang), y2 = B.y - RN * Math.sin(ang);
+      const width = Math.min(9, 1 + 1.1 * Math.abs(w));
+      s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${w >= 0 ? "#455A64" : "#9EAAB0"}" stroke-width="${width}" ${w < 0 ? 'stroke-dasharray="8 5"' : ""} stroke-linecap="round"/>`;
+      const lx = x1 + t * (x2 - x1) + dx, ly = y1 + t * (y2 - y1) + dy;
+      s += `<text x="${lx}" y="${ly}" font-size="15" font-weight="600" text-anchor="middle" fill="${C.ink}" stroke="#fff" stroke-width="4" paint-order="stroke">${f2(w)}</text>`;
+    };
+    const [x1, x2, h1, h2, y] = NODES;
+    edge(x1, h1, P.W[0][0], 0.5, -10);
+    edge(x2, h2, P.W[1][1], 0.5, 22);
+    edge(x1, h2, P.W[1][0], 0.27, -6, 22);
+    edge(x2, h1, P.W[0][1], 0.27, 10);
+    edge(h1, y, P.v[0], 0.5, -12);
+    edge(h2, y, P.v[1], 0.5, 24);
+
+    NODES.forEach((nd, i) => {
+      const color = nd.n === undefined ? "#555" : NCOL[nd.n];
+      const a = act[i];
+      const sel = nd.n === state.sel;
+      s += `<g class="${nd.n !== undefined ? "node" : ""}" data-n="${nd.n ?? ""}">`;
+      s += `<circle cx="${nd.x}" cy="${nd.y}" r="${RN}" fill="${a === null ? "#fff" : rgba(color, 0.08 + 0.6 * a)}" stroke="${color}" stroke-width="${sel ? 4.5 : 2}"/>`;
+      s += `<text x="${nd.x}" y="${nd.y + 6}" font-size="20" text-anchor="middle" font-style="italic" font-family="Cambria Math, Times New Roman, serif" fill="${C.ink}">${nd.name}</text>`;
+      s += `</g>`;
+    });
+    // values next to nodes
+    const val = (x, yy, txt, color, anchor = "middle") =>
+      s += `<text x="${x}" y="${yy}" font-size="13" text-anchor="${anchor}" fill="${color}">${txt}</text>`;
+    val(x1.x - 36, x1.y + 5, f2(state.q[0]), C.ink, "end");
+    val(x2.x - 36, x2.y + 5, f2(state.q[1]), C.ink, "end");
+    val(h1.x, h1.y - 38, `b₁ = ${f2(P.b[0])}`, C.muted);
+    val(h2.x, h2.y + 48, `b₂ = ${f2(P.b[1])}`, C.muted);
+    val(h1.x + 34, h1.y - 24, f2(r.h[0]), C.h1, "start");
+    val(h2.x + 34, h2.y + 34, f2(r.h[1]), C.h2, "start");
+    val(y.x, y.y - 38, `c = ${f2(P.c)}`, C.muted);
+    val(y.x, y.y + 48, `ŷ = ${r.y.toFixed(3)}`, C.p);
+    // layer captions
+    s += `<text x="80" y="282" font-size="13" text-anchor="middle" fill="${C.muted}">input</text>`;
+    s += `<text x="290" y="282" font-size="13" text-anchor="middle" fill="${C.muted}">hidden layer</text>`;
+    s += `<text x="480" y="282" font-size="13" text-anchor="middle" fill="${C.muted}">output</text>`;
+    net.innerHTML = s;
+  }
+  net.addEventListener("click", e => {
+    const g = e.target.closest(".node");
+    if (g && g.dataset.n !== "") { state.sel = +g.dataset.n; render(); }
+  });
+
+  // ---------- Calculation panel ----------
+  const mx = (rows, colors) =>
+    `<span class="mx" style="grid-template-columns:repeat(${rows[0].length},auto)">` +
+    rows.map((r, i) => r.map(v => `<span style="color:${colors ? colors[i] : "inherit"}">${v}</span>`).join("")).join("") +
+    `</span>`;
+
+  function renderCalc() {
+    const [qx, qy] = state.q, r = fwd(qx, qy), cls = r.y >= 0.5 ? 1 : 0, HC = [C.h1, C.h2];
+    document.getElementById("calc").innerHTML =
+      `<b>z</b> = <b>W</b><b>x</b> + <b>b</b> = ` +
+      mx(P.W.map(row => row.map(f2)), HC) + mx([[f2(qx)], [f2(qy)]]) + ` + ` + mx([[f2(P.b[0])], [f2(P.b[1])]], HC) +
+      ` = ` + mx([[f2(r.z[0])], [f2(r.z[1])]], HC) + `<br>` +
+      `<b>h</b> = <i>σ</i>(<b>z</b>) = ` + mx([[r.h[0].toFixed(3)], [r.h[1].toFixed(3)]], HC) + `<br>` +
+      `<i>z</i> = <i>v</i><sub>1</sub><i class="h1c">h</i><sub>1</sub> + <i>v</i><sub>2</sub><i class="h2c">h</i><sub>2</sub> + <i>c</i> = ` +
+      `${f2(P.v[0])}·<span class="h1c">${r.h[0].toFixed(3)}</span> + ${par(P.v[1])}·<span class="h2c">${r.h[1].toFixed(3)}</span> + ${par(P.c)} = <b class="zc">${f2(r.zo)}</b><br>` +
+      `<i class="pc">ŷ</i> = <i>σ</i>(${f2(r.zo)}) = <b class="pc">${r.y.toFixed(3)}</b> &nbsp;` +
+      `<span class="verdict" style="color:${cls ? C.c1 : C.c0}">⇒ predict class ${cls}</span>`;
+
+    let loss = 0, correct = 0;
+    DATA.forEach(([a, b, c]) => {
+      const p = Math.min(1 - 1e-12, Math.max(1e-12, fwd(a, b).y));
+      loss -= c ? Math.log(p) : Math.log(1 - p);
+      correct += (p >= 0.5) === (c === 1);
+    });
+    document.getElementById("loss").textContent = (loss / DATA.length).toFixed(4);
+    document.getElementById("acc").textContent = `${correct} / ${DATA.length}`;
+    document.getElementById("step").textContent = state.steps ? `GD step ${state.steps}` : "";
+  }
+
+  // ---------- Controls ----------
+  const PARAMS = {
+    W00: [() => P.W[0][0], v => P.W[0][0] = v], W01: [() => P.W[0][1], v => P.W[0][1] = v], b0: [() => P.b[0], v => P.b[0] = v],
+    W10: [() => P.W[1][0], v => P.W[1][0] = v], W11: [() => P.W[1][1], v => P.W[1][1] = v], b1: [() => P.b[1], v => P.b[1] = v],
+    v0: [() => P.v[0], v => P.v[0] = v], v1: [() => P.v[1], v => P.v[1] = v], c: [() => P.c, v => P.c = v],
+  };
+  function syncControls() {
+    const set = (id, v) => {
+      document.getElementById("s_" + id).value = v;
+      document.getElementById("o_" + id).textContent = v.toFixed(2);
+    };
+    for (const [id, [get]] of Object.entries(PARAMS)) set(id, get());
+    set("x1", state.q[0]); set("x2", state.q[1]);
+    document.getElementById("tPlane").checked = state.plane;
+    document.getElementById("tSig").checked = state.sig;
+    document.getElementById("tRegions").checked = state.regions;
+    document.querySelectorAll("#sel button").forEach(b => b.classList.toggle("on", +b.dataset.n === state.sel));
+    const sl = document.getElementById("sigLabel");
+    sl.style.color = NCOL[state.sel];
+    sl.innerHTML = ["<i class='m'>h</i>₁ = <i class='m'>σ</i>(<i class='m'>z</i>₁)", "<i class='m'>h</i>₂ = <i class='m'>σ</i>(<i class='m'>z</i>₂)",
+                    "<i class='m'>ŷ</i> = <i class='m'>σ</i>(<i class='m'>z</i>)"][state.sel];
+  }
+
+  function render() {
+    if (W3) render3d();
+    PANELS.forEach(drawPanel);
+    renderNet(); renderCalc(); syncControls();
+  }
+
+  for (const [id, [, setter]] of Object.entries(PARAMS)) {
+    document.getElementById("s_" + id).addEventListener("input", e => {
+      stopTrain(); setter(parseFloat(e.target.value)); state.steps = 0; render();
+    });
+  }
+  ["x1", "x2"].forEach((id, k) => {
+    document.getElementById("s_" + id).addEventListener("input", e => { state.q[k] = parseFloat(e.target.value); render(); });
+  });
+  document.querySelectorAll("#sel button").forEach(b => b.addEventListener("click", () => { state.sel = +b.dataset.n; render(); }));
+  document.getElementById("tPlane").addEventListener("change", e => { state.plane = e.target.checked; render(); });
+  document.getElementById("tSig").addEventListener("change", e => { state.sig = e.target.checked; render(); });
+  document.getElementById("tRegions").addEventListener("change", e => { state.regions = e.target.checked; render(); });
+  document.getElementById("bView").addEventListener("click", () => { state.view = { a: 0.55, e: 0.38 }; render(); });
+  document.getElementById("bBoard").addEventListener("click", () => { stopTrain(); P = clone(BOARD); state.steps = 0; render(); });
+  document.getElementById("bRandom").addEventListener("click", () => {
+    stopTrain();
+    const u = s => (2 * Math.random() - 1) * s;
+    P = { W: [[u(2), u(2)], [u(2), u(2)]], b: [u(1), u(1)], v: [u(2), u(2)], c: 0 };
+    state.steps = 0; render();
+  });
+
+  // Backpropagation on the mean cross-entropy
+  let trainAnim = null;
+  function stopTrain() { cancelAnimationFrame(trainAnim); trainAnim = null; }
+  document.getElementById("bTrain").addEventListener("click", () => {
+    stopTrain();
+    const lr = 1.0, perFrame = 4, maxSteps = 800, N = DATA.length;
+    let done = 0;
+    const step = () => {
+      const gW = [[0, 0], [0, 0]], gb = [0, 0], gv = [0, 0];
+      let gc = 0;
+      DATA.forEach(([a, b, t]) => {
+        const r = fwd(a, b), dzo = r.y - t;              // ∂L/∂z_out
+        gc += dzo;
+        for (let j = 0; j < 2; j++) {
+          gv[j] += dzo * r.h[j];
+          const dz = dzo * P.v[j] * r.h[j] * (1 - r.h[j]); // ∂L/∂z_j
+          gW[j][0] += dz * a; gW[j][1] += dz * b; gb[j] += dz;
+        }
+      });
+      for (let j = 0; j < 2; j++) {
+        P.W[j][0] -= lr * gW[j][0] / N; P.W[j][1] -= lr * gW[j][1] / N;
+        P.b[j] -= lr * gb[j] / N; P.v[j] -= lr * gv[j] / N;
+      }
+      P.c -= lr * gc / N;
+    };
+    const frameFn = () => {
+      for (let k = 0; k < perFrame; k++) { step(); state.steps++; done++; }
+      render();
+      if (done < maxSteps) trainAnim = requestAnimationFrame(frameFn);
+    };
+    trainAnim = requestAnimationFrame(frameFn);
+  });
+
+  // 3D: drag rotates, click moves the query point
+  let drag = null;
+  cv.addEventListener("pointerdown", e => {
+    drag = { x: e.clientX, y: e.clientY, moved: false, a: state.view.a, e: state.view.e };
+    cv.setPointerCapture(e.pointerId);
+  });
+  cv.addEventListener("pointermove", e => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.hypot(dx, dy) > 4) drag.moved = true;
+    if (drag.moved) {
+      cv.classList.add("dragging");
+      state.view.a = drag.a + dx * 0.01;
+      state.view.e = Math.min(1.5, Math.max(0.08, drag.e + dy * 0.008));
+      render3d();
+    }
+  });
+  cv.addEventListener("pointerup", e => {
+    if (drag && !drag.moved) {
+      const r = cv.getBoundingClientRect();
+      const [x, y] = unprojectFloor(e.clientX - r.left, e.clientY - r.top);
+      if (Math.abs(x) <= XR && Math.abs(y) <= XR) { state.q = [x, y]; render(); }
+    }
+    drag = null; cv.classList.remove("dragging");
+  });
+
+  // Sizing
+  function fit(canvas, c) {
+    const dpr = window.devicePixelRatio || 1, r = canvas.getBoundingClientRect();
+    canvas.width = Math.round(r.width * dpr); canvas.height = Math.round(r.height * dpr);
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return r;
+  }
+  new ResizeObserver(() => {
+    const r = fit(cv, ctx);
+    W3 = r.width; H3 = r.height; S = Math.min(W3, H3) / 10.2; CX = W3 / 2; CY = H3 / 2 + 0.02 * H3;
+    PANELS.forEach(p => { const pr = fit(p.cv, p.ctx); p.w = pr.width; p.h = pr.height; });
+    render();
+  }).observe(document.querySelector("main"));
+})();
+</script>
+</body>
+</html>

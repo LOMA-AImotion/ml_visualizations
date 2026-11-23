@@ -53,6 +53,8 @@ Interactive demonstrations of neural network training and optimization:
 
 - [Shallow Neural Network](https://loma-aimotion.github.io/ml_visualizations/shallow_neural_network.html) - Basic neural network architecture visualization
 - [Shallow Neural Network with Gradient Descent](https://loma-aimotion.github.io/ml_visualizations/shallow_neural_network_grad_descent.html) - Training visualization with gradient descent
+- [MLP Hidden Layer 2D](https://loma-aimotion.github.io/ml_visualizations/mlp_2d_interactive.html) - Multi-layer perceptron as stacked logistic regressions: every hidden neuron is one logistic regression, and the output neuron combines them into a non-linear decision boundary
+- [One-Hidden-Layer Network 1D](https://loma-aimotion.github.io/ml_visualizations/nn_1d_adaptivity_interactive.html) - A network with one hidden layer learns a function from noisy points via gradient descent; change dataset, noise and number of units during training and watch it adapt from its current state (German)
 
 
 ## 🤖 Deep Learning
